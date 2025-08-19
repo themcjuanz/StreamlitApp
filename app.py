@@ -18,7 +18,7 @@ st.markdown("""
     background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
     padding: 2rem;
     border-radius: 15px;
-    color: white;
+    color: black;
     text-align: center;
     margin-bottom: 2rem;
     box-shadow: 0 8px 32px rgba(0,0,0,0.1);
@@ -47,12 +47,12 @@ st.markdown("""
     color: #4CAF50;
     font-weight: bold;
 }
-
+            
 .trend-negative {
     color: #f44336;
     font-weight: bold;
 }
-
+            
 .stat-highlight {
     background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
     padding: 1rem;

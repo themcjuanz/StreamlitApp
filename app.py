@@ -452,6 +452,59 @@ with tab4:
         </div>
         """, unsafe_allow_html=True)
 
+        import streamlit as st
+
+# Cargar CSV
+df = pd.read_csv("forecast_24m.csv")
+df["ds"] = pd.to_datetime(df["ds"])
+
+# Definir tema oscuro
+alt.themes.register('dark_theme', lambda: {
+    'config': {
+        'background': 'black',
+        'title': {'color': 'white'},
+        'axis': {
+            'domainColor': 'white',
+            'gridColor': '#444',
+            'labelColor': 'white',
+            'titleColor': 'white'
+        },
+        'legend': {
+            'labelColor': 'white',
+            'titleColor': 'white'
+        }
+    }
+})
+alt.themes.enable('dark_theme')
+
+# Banda de confianza
+band = alt.Chart(df).mark_area(opacity=0.3, color="cyan").encode(
+    x="ds",
+    y="yhat_lower",
+    y2="yhat_upper"
+)
+
+# Línea de forecast
+line = alt.Chart(df).mark_line(color="cyan").encode(
+    x="ds",
+    y="yhat"
+)
+
+# Puntos en la línea
+points = alt.Chart(df).mark_point(color="cyan").encode(
+    x="ds",
+    y="yhat"
+)
+
+chart = (band + line + points).properties(
+    title="Forecast con Intervalo de Confianza",
+    width=700,
+    height=400
+)
+
+st.altair_chart(chart, use_container_width=True)
+
+
 # Footer
 st.markdown("---")
 st.markdown("""

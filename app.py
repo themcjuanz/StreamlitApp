@@ -14,61 +14,107 @@ st.set_page_config(
 # Estilo personalizado (mantengo igual)
 st.markdown("""
 <style>
+/* Fondo general (opcional) */
+.report-background {
+    background-color: #0b0f14; /* fondo general muy oscuro (casi negro) */
+    color: #e6eef6;            /* texto por defecto claro */
+}
+
+/* Header */
 .main-header {
-    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(90deg, #2b3150 0%, #1f2438 100%);
     padding: 2rem;
     border-radius: 15px;
-    color: black;
+    color: white;
     text-align: center;
     margin-bottom: 2rem;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6);
 }
 
+/* Métricas (si quieres mantenerlas brillantes) */
 .metric-container {
-    background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+    background: linear-gradient(135deg, #0f1722 0%, #111827 100%);
     padding: 1.5rem;
     border-radius: 12px;
-    color: white;
+    color: #f7fafc;
     text-align: center;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.6);
     margin-bottom: 1rem;
+    border: 1px solid rgba(255,255,255,0.03);
 }
 
+/* CAJA OSCURA CENTRAL: Dataset Cargado y Estadísticas Básicas */
 .insight-box {
-    background: rgba(255, 255, 255, 0.9);
+    background: linear-gradient(180deg, #090b0d 0%, #0f1722 100%);
     padding: 1.5rem;
     border-radius: 12px;
-    border-left: 5px solid #4CAF50;
+    border-left: 5px solid #16a34a; /* borde verde visible sobre oscuro */
     margin: 1rem 0;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    box-shadow: 0 6px 24px rgba(2,6,23,0.7);
+    color: #e6eef6; /* texto claro */
 }
 
+/* Titulos/headers dentro de insight */
+.insight-box h4 {
+    color: #ffffff;
+    margin-bottom: 0.5rem;
+}
+.insight-box p, .insight-box li, .insight-box pre {
+    color: #d1e7ff;
+}
+
+/* Estadísticas básicas (si usas la misma clase, ya queda oscuro).
+   Si quieres un estilo diferencial, puedes usar .stat-card */
+.stat-card {
+    background: #0b1220;
+    color: #e6eef6;
+    padding: 1rem;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.03);
+}
+
+/* Texto de tendencia */
 .trend-positive {
-    color: #4CAF50;
+    color: #34d399;
     font-weight: bold;
 }
-            
 .trend-negative {
-    color: #f44336;
+    color: #ff6b6b;
     font-weight: bold;
 }
-            
+
+/* Resaltados estadísticos */
 .stat-highlight {
-    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+    background: linear-gradient(135deg, #111317 0%, #0b1220 100%);
     padding: 1rem;
     border-radius: 8px;
-    color: white;
+    color: #f8fafc;
     text-align: center;
     margin: 0.5rem 0;
+    border: 1px solid rgba(255,255,255,0.02);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.6);
 }
 
+/* Section headers (puedes hacerlo oscuro también) */
 .section-header {
-    background: linear-gradient(90deg, #74b9ff 0%, #0984e3 100%);
+    background: linear-gradient(90deg, #0b1220 0%, #131824 100%);
     padding: 1rem;
     border-radius: 8px;
-    color: white;
+    color: #e6eef6;
     text-align: center;
     margin: 1.5rem 0 1rem 0;
+    border: 1px solid rgba(255,255,255,0.02);
+}
+
+/* Asegurar que tablas y dataframes se vean bien */
+.stDataFrame, .dataframe {
+    background: transparent !important;
+    color: #e6eef6 !important;
+}
+
+/* Opcional: forzar fondo oscuro del body de la app */
+[data-testid="stAppViewContainer"] > div {
+    background: #071016; /* tonalidad muy oscura */
 }
 </style>
 """, unsafe_allow_html=True)

@@ -87,11 +87,11 @@ st.markdown("""
 
 # Asignar tu dataset aquí
 # Ejemplo: df_datos = pd.read_csv('tu_archivo.csv')
-df_datos = None  # Reemplaza con tu DataFrame
+df_datos = pd.read_csv("mensual.csv")  # Reemplaza con tu DataFrame
 
 # Especificar nombres de columnas
-COLUMNA_FECHA = 'fecha'      # Nombre de tu columna de fecha
-COLUMNA_VALOR = 'valor'      # Nombre de tu columna de valores
+COLUMNA_FECHA = 'ds'      # Nombre de tu columna de fecha
+COLUMNA_VALOR = 'y'      # Nombre de tu columna de valores
 
 # ========================================
 

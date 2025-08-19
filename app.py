@@ -1,9 +1,11 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.express as px
-import plotly.graph_objects as go
+import altair as alt
 from datetime import datetime, timedelta
+
+# Si usabas scipy para la regresión de tendencia:
+from scipy import stats
 
 # Configuración de la página
 st.set_page_config(
@@ -12,7 +14,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Estilo personalizado
+# Estilo personalizado (mantengo igual)
 st.markdown("""
 <style>
 .main-header {
@@ -88,7 +90,7 @@ st.markdown("""
 
 # Asignar tu dataset aquí
 # Ejemplo: df_datos = pd.read_csv('tu_archivo.csv')
-df_datos = pd.read_csv("mensual.csv") # Reemplaza con tu DataFrame
+df_datos = pd.read_csv("mensual.csv")  # Reemplaza con tu DataFrame
 
 # Especificar nombres de columnas
 COLUMNA_FECHA = 'ds'      # Nombre de tu columna de fecha
@@ -204,36 +206,21 @@ with col4:
     </div>
     """, unsafe_allow_html=True)
 
-# Gráfico principal
+# Gráfico principal (Altair)
 st.markdown('<div class="section-header"><h2>📈 Visualización Principal</h2></div>', unsafe_allow_html=True)
 
-fig = go.Figure()
-
-fig.add_trace(go.Scatter(
-    x=df_ejemplo['fecha'],
-    y=df_ejemplo['valor'],
-    mode='lines+markers',
-    name='Serie de Tiempo',
-    line=dict(color='#667eea', width=3),
-    marker=dict(size=6, color='#764ba2')
-))
-
-# Línea de promedio
-fig.add_hline(y=promedio_total, 
-              line_dash="dash", 
-              line_color="red", 
-              annotation_text=f"Promedio: {promedio_total:.2f}")
-
-fig.update_layout(
-    title="Evolución Temporal de la Serie",
-    xaxis_title="Fecha",
-    yaxis_title="Valor",
-    hovermode='x unified',
-    height=500,
-    template='plotly_white'
+# Linea principal con puntos
+base = alt.Chart(df_ejemplo).encode(
+    x=alt.X('fecha:T', title='Fecha'),
+    y=alt.Y('valor:Q', title='Valor'),
+    tooltip=[alt.Tooltip('fecha:T', title='Fecha'), alt.Tooltip('valor:Q', title='Valor')]
 )
 
-st.plotly_chart(fig, use_container_width=True)
+line = base.mark_line(point=True).properties(height=500)
+avg_rule = alt.Chart(pd.DataFrame({'y': [promedio_total]})).mark_rule(color='red', strokeDash=[6,4]).encode(y='y:Q').interactive()
+avg_text = alt.Chart(pd.DataFrame({'y':[promedio_total], 'label':[f'Promedio: {promedio_total:.2f}']})).mark_text(align='left', dx=5, dy=-5).encode(y='y:Q', text='label:N')
+
+st.altair_chart((line + avg_rule + avg_text).interactive(), use_container_width=True)
 
 # Análisis detallado en pestañas
 tab1, tab2, tab3, tab4 = st.tabs([
@@ -262,76 +249,58 @@ with tab1:
         """, unsafe_allow_html=True)
     
     with col2:
-        # Histograma de distribución
-        fig_hist = px.histogram(
-            df_ejemplo, 
-            x='valor', 
-            nbins=20,
-            title="Distribución de Valores",
-            color_discrete_sequence=['#667eea']
-        )
-        fig_hist.update_layout(height=400)
-        st.plotly_chart(fig_hist, use_container_width=True)
+        # Histograma con Altair
+        hist = alt.Chart(df_ejemplo).mark_bar().encode(
+            alt.X('valor:Q', bin=alt.Bin(maxbins=20), title='Valor'),
+            alt.Y('count()', title='Frecuencia'),
+            tooltip=[alt.Tooltip('count()', title='Frecuencia')]
+        ).properties(title="Distribución de Valores", height=400)
+        st.altair_chart(hist, use_container_width=True)
 
 with tab2:
     st.markdown('<div class="section-header"><h3>📈 Análisis de Tendencia</h3></div>', unsafe_allow_html=True)
     
-# Importar scipy solo si hay datos
-if df_ejemplo is not None:
-    from scipy import stats
-    x_numeric = np.arange(len(df_ejemplo))
-    slope, intercept, r_value, p_value, std_err = stats.linregress(x_numeric, df_ejemplo['valor'])
-    
-    # Gráfico con línea de tendencia
-    fig_trend = go.Figure()
-    
-    fig_trend.add_trace(go.Scatter(
-        x=df_ejemplo['fecha'],
-        y=df_ejemplo['valor'],
-        mode='lines+markers',
-        name='Serie Original',
-        line=dict(color='#667eea', width=2),
-        marker=dict(size=4)
-    ))
-    
-    # Línea de tendencia
-    trend_line = slope * x_numeric + intercept
-    fig_trend.add_trace(go.Scatter(
-        x=df_ejemplo['fecha'],
-        y=trend_line,
-        mode='lines',
-        name='Línea de Tendencia',
-        line=dict(color='red', width=3, dash='dash')
-    ))
-    
-    fig_trend.update_layout(
-        title="Serie de Tiempo con Línea de Tendencia",
-        xaxis_title="Fecha",
-        yaxis_title="Valor",
-        height=400
-    )
-    
-    st.plotly_chart(fig_trend, use_container_width=True)
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown(f"""
-        <div class="stat-highlight">
-            <h4>Pendiente de Tendencia</h4>
-            <h2>{slope:.4f}</h2>
-            <p>Cambio por período</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown(f"""
-        <div class="stat-highlight">
-            <h4>Correlación (R²)</h4>
-            <h2>{r_value**2:.4f}</h2>
-            <p>Ajuste del modelo</p>
-        </div>
-        """, unsafe_allow_html=True)
+# Cálculo de regresión lineal (usa índices como antes)
+x_numeric = np.arange(len(df_ejemplo))
+slope, intercept, r_value, p_value, std_err = stats.linregress(x_numeric, df_ejemplo['valor'])
+
+# Gráfico con línea de tendencia (Altair)
+df_trend = df_ejemplo.copy()
+df_trend['trend'] = slope * x_numeric + intercept
+
+chart_orig = alt.Chart(df_trend).mark_line().encode(
+    x='fecha:T',
+    y='valor:Q',
+    tooltip=[alt.Tooltip('fecha:T', title='Fecha'), alt.Tooltip('valor:Q', title='Valor')]
+)
+
+chart_trend = alt.Chart(df_trend).mark_line(strokeDash=[6,4], color='red').encode(
+    x='fecha:T',
+    y='trend:Q',
+    tooltip=[alt.Tooltip('trend:Q', title='Trend')]
+)
+
+st.altair_chart((chart_orig + chart_trend).properties(height=400).interactive(), use_container_width=True)
+
+col1, col2 = st.columns(2)
+
+with col1:
+    st.markdown(f"""
+    <div class="stat-highlight">
+        <h4>Pendiente de Tendencia</h4>
+        <h2>{slope:.4f}</h2>
+        <p>Cambio por período</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col2:
+    st.markdown(f"""
+    <div class="stat-highlight">
+        <h4>Correlación (R²)</h4>
+        <h2>{r_value**2:.4f}</h2>
+        <p>Ajuste del modelo</p>
+    </div>
+    """, unsafe_allow_html=True)
 
 with tab3:
     st.markdown('<div class="section-header"><h3>📅 Análisis Temporal</h3></div>', unsafe_allow_html=True)
@@ -348,31 +317,25 @@ with tab3:
         # Análisis por año
         df_anual = df_tiempo.groupby('año')['valor'].mean().reset_index()
         
-        fig_anual = px.bar(
-            df_anual,
-            x='año',
-            y='valor',
-            title="Promedio Anual",
-            color='valor',
-            color_continuous_scale='Blues'
-        )
-        fig_anual.update_layout(height=350)
-        st.plotly_chart(fig_anual, use_container_width=True)
+        fig_anual = alt.Chart(df_anual).mark_bar().encode(
+            x=alt.X('año:O', title='Año'),
+            y=alt.Y('valor:Q', title='Promedio'),
+            tooltip=[alt.Tooltip('año:O', title='Año'), alt.Tooltip('valor:Q', title='Promedio')],
+            color=alt.Color('valor:Q', scale=alt.Scale(scheme='blues'), legend=None)
+        ).properties(height=350, title="Promedio Anual")
+        st.altair_chart(fig_anual, use_container_width=True)
     
     with col2:
         # Análisis por mes
         df_mensual = df_tiempo.groupby('mes')['valor'].mean().reset_index()
+        df_mensual['mes_str'] = df_mensual['mes'].apply(lambda m: datetime(2000, m, 1).strftime('%b'))
         
-        fig_mensual = px.line(
-            df_mensual,
-            x='mes',
-            y='valor',
-            title="Patrón Estacional (Mensual)",
-            markers=True
-        )
-        fig_mensual.update_layout(height=350)
-        fig_mensual.update_traces(line_color='#764ba2', line_width=3, marker_size=8)
-        st.plotly_chart(fig_mensual, use_container_width=True)
+        fig_mensual = alt.Chart(df_mensual).mark_line(point=True).encode(
+            x=alt.X('mes:O', title='Mes', sort=list(range(1,13))),
+            y=alt.Y('valor:Q', title='Valor'),
+            tooltip=[alt.Tooltip('mes:O', title='Mes'), alt.Tooltip('valor:Q', title='Valor')]
+        ).properties(height=350, title="Patrón Estacional (Mensual)")
+        st.altair_chart(fig_mensual, use_container_width=True)
 
 with tab4:
     st.markdown('<div class="section-header"><h3>🔍 Insights Automáticos</h3></div>', unsafe_allow_html=True)

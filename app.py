@@ -4,9 +4,6 @@ import numpy as np
 import altair as alt
 from datetime import datetime, timedelta
 
-# Si usabas scipy para la regresión de tendencia:
-from scipy import stats
-
 # Configuración de la página
 st.set_page_config(
     page_title="Análisis de Serie de Tiempo",
@@ -90,11 +87,11 @@ st.markdown("""
 
 # Asignar tu dataset aquí
 # Ejemplo: df_datos = pd.read_csv('tu_archivo.csv')
-df_datos = pd.read_csv("mensual.csv")  # Reemplaza con tu DataFrame
+df_datos = None  # Reemplaza con tu DataFrame
 
 # Especificar nombres de columnas
-COLUMNA_FECHA = 'ds'      # Nombre de tu columna de fecha
-COLUMNA_VALOR = 'y'      # Nombre de tu columna de valores
+COLUMNA_FECHA = 'fecha'      # Nombre de tu columna de fecha
+COLUMNA_VALOR = 'valor'      # Nombre de tu columna de valores
 
 # ========================================
 
@@ -260,9 +257,25 @@ with tab1:
 with tab2:
     st.markdown('<div class="section-header"><h3>📈 Análisis de Tendencia</h3></div>', unsafe_allow_html=True)
     
+# --- Reemplazo de scipy.linregress por numpy.polyfit / corrcoef ---
 # Cálculo de regresión lineal (usa índices como antes)
 x_numeric = np.arange(len(df_ejemplo))
-slope, intercept, r_value, p_value, std_err = stats.linregress(x_numeric, df_ejemplo['valor'])
+y = df_ejemplo['valor'].values
+
+# Si la serie es constante, polyfit puede devolver nan; manejamos casos degenerados
+if len(x_numeric) < 2 or np.allclose(np.std(y), 0):
+    slope = 0.0
+    intercept = float(np.mean(y)) if len(y) > 0 else 0.0
+    r_value = 0.0
+else:
+    slope, intercept = np.polyfit(x_numeric, y, 1)
+    # coeficiente de correlación
+    try:
+        r_value = np.corrcoef(x_numeric, y)[0, 1]
+        if np.isnan(r_value):
+            r_value = 0.0
+    except Exception:
+        r_value = 0.0
 
 # Gráfico con línea de tendencia (Altair)
 df_trend = df_ejemplo.copy()

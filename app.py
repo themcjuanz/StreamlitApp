@@ -20,33 +20,41 @@ st.set_page_config(
 st.markdown("""
 <style>
 /* Fondo general oscuro */
-.report-background { background-color: #0b0f0f; color: #aaf0aa; }
+.report-background { background-color: #0b0f0c; color: #0b0f0c; }
 
-/* Encabezado principal: verde degradado */
+/* Encabezado principal (más pequeño, color verde claro) */
 .main-header { 
-    background: linear-gradient(90deg, #00994d 0%, #006633 100%);
-    padding: 1.5rem; 
-    border-radius: 12px; 
-    color: white; 
+    background: #0d1f17;        /* verde oscuro sólido */
+    padding: 1rem; 
+    border-radius: 6px; 
+    color: #a8f5c0;             /* verde claro elegante */
     text-align: center; 
-    margin-bottom: 1rem; 
+    margin-bottom: 1.5rem; 
+    border: 1px solid #1e5a3a;  /* borde verde profundo */
+    box-shadow: 0 3px 8px rgba(0,0,0,0.5); /* sombra sutil */
+}
+.main-header h1 {
+    font-size: 1.9rem;    
+    font-weight: 600;     
+    margin: 0;
+    letter-spacing: 0.5px;
 }
 
 /* Cajas de presentación e insights */
 .presentation-box, .insight-box { 
     background: #1a1f1d;   /* gris oscuro */
-    padding: 1.5rem; 
-    border-radius: 10px; 
+    padding: 1rem; 
+    border-radius: 0px; 
     margin: 1rem 0; 
     color: #ccffcc;        /* texto verde claro */
 }
 
-/* Encabezados de sección */
+/* Encabezados de sección (verde más oscuro, igual que objetivo) */
 .section-header { 
-    background: #004d26; 
+    background: #1a1f1d; 
     padding: 1rem; 
-    border-radius: 8px; 
-    color: #ffffff; 
+    border-radius: 0px; 
+    color: #ccffcc; 
     text-align: center; 
     margin: 1rem 0; 
 }
@@ -57,7 +65,6 @@ st.markdown("""
 }
 </style>
 """, unsafe_allow_html=True)
-
 
 # -------------------------
 # CARGA DE DATOS

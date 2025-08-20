@@ -26,7 +26,7 @@ st.markdown("""
 .main-header { 
     background: #0d1f17;        /* verde oscuro sólido */
     padding: 1rem; 
-    border-radius: 6px; 
+    border-radius: 0px; 
     color: #a8f5c0;             /* verde claro elegante */
     text-align: center; 
     margin-bottom: 1.5rem; 

@@ -19,13 +19,45 @@ st.set_page_config(
 # -------------------------
 st.markdown("""
 <style>
-.report-background { background-color: #0b0f14; color: #e6eef6; }
-.main-header { background: linear-gradient(90deg, #2b3150 0%, #1f2438 100%); padding: 1.5rem; border-radius: 12px; color: white; text-align: center; margin-bottom: 1rem; }
-.presentation-box, .insight-box { background: #111827; padding: 1.5rem; border-radius: 10px; margin: 1rem 0; color: #e6eef6; }
-.section-header { background: #1f2937; padding: 1rem; border-radius: 8px; color: #e6eef6; text-align: center; margin: 1rem 0; }
-[data-testid="stAppViewContainer"] > div { background: #071016; }
+/* Fondo general oscuro */
+.report-background { background-color: #0b0f0f; color: #aaf0aa; }
+
+/* Encabezado principal: verde degradado */
+.main-header { 
+    background: linear-gradient(90deg, #00994d 0%, #006633 100%);
+    padding: 1.5rem; 
+    border-radius: 12px; 
+    color: white; 
+    text-align: center; 
+    margin-bottom: 1rem; 
+}
+
+/* Cajas de presentación e insights */
+.presentation-box, .insight-box { 
+    background: #1a1f1d;   /* gris oscuro */
+    padding: 1.5rem; 
+    border-radius: 10px; 
+    margin: 1rem 0; 
+    color: #ccffcc;        /* texto verde claro */
+}
+
+/* Encabezados de sección */
+.section-header { 
+    background: #004d26; 
+    padding: 1rem; 
+    border-radius: 8px; 
+    color: #ffffff; 
+    text-align: center; 
+    margin: 1rem 0; 
+}
+
+/* Fondo general de la app */
+[data-testid="stAppViewContainer"] > div { 
+    background: #0b0f0f; 
+}
 </style>
 """, unsafe_allow_html=True)
+
 
 # -------------------------
 # CARGA DE DATOS
@@ -35,7 +67,8 @@ COLUMNA_VALOR = 'y'
 
 
 df_datos = pd.read_csv("mensual.csv")
-df_datosp = pd.read_csv("cleaned_dataframe.csv")
+df_datosp = pd.read_csv("Numero_de_Veh_culos_El_ctricos_-_Hibridos_20250804.csv")
+df_datosc = pd.read_csv("cleaned_dataframe.csv")
 
 # Procesamiento
 try:
@@ -83,26 +116,22 @@ with tabs[0]:
 
     # --- Vista previa del dataset completo ---
     st.subheader("Vista previa del dataset original")
-    st.dataframe(df_datosp.head(10))  # muestra primeras filas
+    st.dataframe(df_datosp.head(4))  # muestra primeras filas
 
-    # --- Valores únicos de columnas clave ---
-    st.subheader("Valores únicos en variables categóricas")
+    st.markdown("""
+    <div class="presentation-box">
+        <p>Decidimos prescindir de algunas columnas y filas que contenían datos nulos</p>
+    </div>
+    """, unsafe_allow_html=True)
 
-    if "DEPARTAMENTO" in df_datosp.columns:
-        st.markdown("**Departamentos registrados:**")
-        st.write(sorted(df_datosp["DEPARTAMENTO"].dropna().unique().tolist()))
-
-    if "CLASE" in df_datosp.columns:
-        st.markdown("**Clases de vehículos:**")
-        st.write(sorted(df_datosp["CLASE"].dropna().unique().tolist()))
-
-    if "MARCA" in df_datosp.columns:
-        st.markdown("**Marcas de vehículos:**")
-        st.write(sorted(df_datosp["MARCA"].dropna().unique().tolist()))
+    # --- Vista previa del dataset limpio ---
+    st.subheader("Vista previa del dataset limpio")
+    st.dataframe(df_datosc.head(4))  # muestra primeras filas
 
 # --- FORECAST ---
 with tabs[1]:
-    st.markdown('<div class="section-header"><h3>FORECAST</h3></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header"><h3>Forecast con Prophet</h3><p>Generación de pronósticos para los próximos 24 meses usando un '
+    'conteo mensual extraido del dataset original</p></div>', unsafe_allow_html=True)
 
     df_forecast = None
     try:
@@ -129,20 +158,50 @@ with tabs[1]:
             ultima_fecha_historica = df_ejemplo['fecha'].max()
 
             # Banda de confianza
-            band = alt.Chart(df_forecast).mark_area(opacity=0.25).encode(
+            band = alt.Chart(df_forecast).mark_area(
+                opacity=0.25, 
+                color="#00cc66"   # verde oscuro translúcido
+            ).encode(
                 x='ds:T',
                 y='yhat_lower:Q',
                 y2='yhat_upper:Q'
             )
-            line = alt.Chart(df_forecast).mark_line(color='cyan').encode(x='ds:T', y='yhat:Q')
-            points = alt.Chart(df_forecast).mark_point(color='cyan').encode(x='ds:T', y='yhat:Q')
 
-            # Línea que separa histórico y predicción
-            rule = alt.Chart(pd.DataFrame({'fecha': [ultima_fecha_historica]})).mark_rule(color='orange', strokeDash=[5,5]).encode(x='fecha:T')
+            # Línea de forecast (verde brillante)
+            line = alt.Chart(df_forecast).mark_line(
+                color="#00ff99", 
+                strokeWidth=2
+            ).encode(
+                x='ds:T', 
+                y='yhat:Q'
+            )
 
+            # Puntos del forecast (verde brillante)
+            points = alt.Chart(df_forecast).mark_point(
+                color="#00ff99", 
+                size=40
+            ).encode(
+                x='ds:T', 
+                y='yhat:Q'
+            )
+
+            # Línea divisoria histórico vs forecast
+            rule = alt.Chart(pd.DataFrame({'fecha': [ultima_fecha_historica]})).mark_rule(
+                color='orange', 
+                strokeDash=[5,5], 
+                strokeWidth=2
+            ).encode(x='fecha:T')
+
+            # Combinar todo
             chart = alt.layer(band, line, points, rule).properties(
                 title="Forecast con intervalo de confianza",
-                height=450
+                height=450,
+                background="#0a0f0a"  # fondo oscuro igual al resto
+            ).configure_axis(
+                labelColor="white",
+                titleColor="white"
+            ).configure_title(
+                color="white"
             )
 
             st.altair_chart(chart, use_container_width=True)

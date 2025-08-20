@@ -111,12 +111,11 @@ with tabs[0]:
     st.markdown(f"""
     <div class="presentation-box">
         <h2>Objetivo</h2>
-        <p>Se busca analizar la adopcion de vehiculos electrificados en los diferentes departamentos de colombia y proponer estrategias para su fomento mediante el uso de modelos de series temporales y modelos de clasificacion..</p>
+        <p>Se busca analizar la adopcion de vehiculos electrificados en los diferentes departamentos de colombia y proponer estrategias para su fomento mediante el uso de modelos de series temporales y modelos de clasificacion.</p>
         <p>Analisis previo usando los registros mensuales:<p>
         <ul>
-            <li><strong>Registros procesados:</strong> {len(df_ejemplo):,}</li>
+            <li><strong>Registros procesados:</strong> {len(df_datosp):,}</li>
             <li><strong>Período:</strong> {df_ejemplo['fecha'].min().strftime('%Y-%m-%d')} a {df_ejemplo['fecha'].max().strftime('%Y-%m-%d')}</li>
-            <li><strong>Frecuencia:</strong> Mensual</li>
         </ul>
     </div>
     """, unsafe_allow_html=True)
@@ -218,80 +217,341 @@ with tabs[1]:
             st.altair_chart(chart, use_container_width=True)
 
                     # Example dataimport streamlit as st
-            import pydeck as pdk
+            import os
+            import glob
             import json
+            import unicodedata
+            import math
+
+            import numpy as np
+            import pandas as pd
+            from shapely.geometry import shape, mapping
+            from shapely.affinity import scale
 
             import streamlit as st
             import pydeck as pdk
-            import json
-    
-            # Carga GeoJSON (ajusta ruta)
-            with open("colombia_departments.json", "r", encoding="utf-8") as f:
-                geojson = json.load(f)
 
-                st.markdown(f"""
-                <div class="presentation-box">
-                    <h2>Mapa predictivo por departamentos</h2>
-                    <p>Usando un conteo selectivo se representa la prediccion por departamento:</p>
-                </div>
-                """, unsafe_allow_html=True)
+            # ---------- Config ----------
+            GEOJSON_PATH = "colombia_departments.json"
+            FORECAST_FOLDER = "forecasts"
+            INNER_MIN_SCALE = 0.30     # escala del anillo interior (30% del área original)
+            CONTRAST_FACTOR = 8.0      # <- aumentado para exagerar aún más
+            TEXT_SIZE = 16             # tamaño base del texto en el mapa
+            PREDICTED_YEAR_THRESHOLD = 2023
+            # ---------------------------
 
-            # Ejemplo de counts: usa códigos DPTO para evitar problemas de nombres
-            counts = {
-                "05": 120,   # Antioquia (ejemplo)
-                "08": 80,    # Atlántico
-            }
+            st.title("Mapa predictivo — exagerado al máximo, yhat entero y etiqueta 'predecido' desde 2023")
+            st.caption("Slider arriba. Anillo exterior = yhat_lower, medio = yhat, interior = yhat_upper. Deptos con yhat==0 no muestran anillos.")
 
-            # Función simple para convertir count -> color (verde->amarillo->rojo)
-            def count_to_rgb(c, vmin=0, vmax=200):
-                if c is None:
-                    c = 0
-                # normaliza entre 0 y 1
-                t = max(0, min(1, (c - vmin) / (vmax - vmin if vmax > vmin else 1)))
+            def normalize_name(s: str):
+                if s is None:
+                    return ""
+                s = s.upper().strip()
+                s = unicodedata.normalize("NFD", s)
+                s = "".join(ch for ch in s if unicodedata.category(ch) != "Mn")
+                s = "".join(ch for ch in s if ch.isalnum())
+                return s
 
-                # colores base en RGB
+            def color_from_t(t):
                 dark_green = (0, 204, 102)   # #00cc66
                 bright_green = (0, 255, 153) # #00ff99
-
-                # interpolación lineal entre dark_green y bright_green
                 r = int(dark_green[0] + t * (bright_green[0] - dark_green[0]))
                 g = int(dark_green[1] + t * (bright_green[1] - dark_green[1]))
                 b = int(dark_green[2] + t * (bright_green[2] - dark_green[2]))
-                a = 180  # opacidad
-
+                a = 220
                 return [r, g, b, a]
 
+            def count_to_rgb_exaggerated(val, vmin, vmax, contrast=CONTRAST_FACTOR):
+                """
+                - val None o 0 => color apagado (gris).
+                - Normaliza val entre vmin/vmax, aplica contraste grande y una ligera transformación no lineal
+                para exagerar aún más los extremos.
+                """
+                if val is None:
+                    return [180, 180, 180, 120]
+                if val == 0:
+                    return [180, 180, 180, 120]
+                # seguridad
+                if vmin is None or vmax is None or vmax == vmin:
+                    t = 0.5
+                else:
+                    t = (val - vmin) / (vmax - vmin)
+                t = max(0.0, min(1.0, t))
+                # amplificar simétricamente respecto a 0.5
+                t = 0.5 + contrast * (t - 0.5)
+                # recortar
+                t = max(0.0, min(1.0, t))
+                # aplicar pequeña potenciación para estirar los extremos (más contraste visual)
+                # si t>0.5 lo hacemos más cercano a 1, si t<0.5 lo hacemos más cercano a 0
+                if t >= 0.5:
+                    t = 0.5 + ( (t - 0.5) ** 0.8 ) * 0.5
+                else:
+                    t = 0.5 - ( (0.5 - t) ** 0.8 ) * 0.5
+                t = max(0.0, min(1.0, t))
+                return color_from_t(t)
 
-            # Añade propiedades count y color a cada feature
-            for feat in geojson["features"]:
-                code = feat["properties"].get("DPTO") or feat["properties"].get("DPTO_") or feat["properties"].get("DPTO_COD") 
-                # si no usas códigos, puedes usar NOMBRE_DPT:
-                if code is None:
-                    code = feat["properties"].get("NOMBRE_DPT", "").upper()
-                count = counts.get(code, 0)
-                feat["properties"]["count"] = int(count)
-                feat["properties"]["color"] = count_to_rgb(count, vmin=0, vmax=max(counts.values()) if counts else 1)
+            # --- Cargar geojson base ---
+            with open(GEOJSON_PATH, "r", encoding="utf-8") as f:
+                base_geo = json.load(f)
 
-            # Capa GeoJson — usamos propiedades.color para el fill
+            # --- Cargar forecasts (dataframes por depto normalizado) ---
+            dept_dfs = {}
+            files = glob.glob(os.path.join(FORECAST_FOLDER, "*_forecast.csv"))
+            if not files:
+                st.error(f"No se encontraron archivos '*_forecast.csv' en '{FORECAST_FOLDER}'")
+                st.stop()
+
+            years = []
+            for fp in files:
+                fname = os.path.basename(fp)
+                if not fname.upper().endswith("_FORECAST.CSV"):
+                    continue
+                dept_raw = fname[: -len("_forecast.csv")]
+                dept_norm = normalize_name(dept_raw)
+                try:
+                    df = pd.read_csv(fp)
+                    cols_lower = {c:c.lower() for c in df.columns}
+                    df = df.rename(columns=cols_lower)
+                    if "ds" not in df.columns:
+                        st.warning(f"{fp} no tiene columna 'ds' (fecha). Se omite.")
+                        continue
+                    df["ds"] = pd.to_datetime(df["ds"], errors="coerce")
+                    df = df.dropna(subset=["ds"])
+                    if df.empty:
+                        continue
+                    dept_dfs[dept_norm] = df.reset_index(drop=True)
+                    years.extend(df["ds"].dt.year.dropna().astype(int).tolist())
+                except Exception as e:
+                    st.warning(f"Error leyendo {fp}: {e}")
+                    continue
+
+            if not dept_dfs:
+                st.error("No se pudo leer ningún forecast válido.")
+                st.stop()
+
+            min_year = int(min(years))
+            max_year = int(max(years))
+
+            # -------------------------
+            # Slider ARRIBA del mapa
+            # -------------------------
+            selected_year = st.slider("Selecciona año", min_year, max_year, value=max_year, format="%d")
+            # Mostrar etiqueta especial si estamos en periodo predecido
+            is_predicted = selected_year >= PREDICTED_YEAR_THRESHOLD
+            if is_predicted:
+                st.markdown(f"**Año seleccionado:** {selected_year} — **(predecido)**")
+            else:
+                st.markdown(f"**Año seleccionado:** {selected_year}")
+
+            # --- Extraer valores redondeados (ENTEROS) para el año seleccionado ---
+            dept_values = {}  # dept_norm -> dict yhat_lower,yhat,yhat_upper (INT or None)
+            vals_for_year = []
+            for dept_norm, df in dept_dfs.items():
+                df_year = df[df["ds"].dt.year == int(selected_year)]
+                if not df_year.empty:
+                    row = df_year.iloc[-1]
+                else:
+                    df_before = df[df["ds"].dt.year < int(selected_year)]
+                    row = df_before.iloc[-1] if not df_before.empty else None
+                if row is None:
+                    dept_values[dept_norm] = None
+                else:
+                    def getval(r, names):
+                        for n in names:
+                            if n in r.index:
+                                return r[n]
+                        return None
+                    yhat = getval(row, ["yhat", "YHAT", "yHat"])
+                    yhat_lower = getval(row, ["yhat_lower", "YHAT_LOWER", "yhatLower", "yhat-lower"])
+                    yhat_upper = getval(row, ["yhat_upper", "YHAT_UPPER", "yhatUpper", "yhat-upper"])
+                    def to_int_or_none(x):
+                        try:
+                            if x is None or (isinstance(x, float) and np.isnan(x)):
+                                return None
+                            xi = int(round(float(x)))
+                            return xi
+                        except Exception:
+                            return None
+                    yi = to_int_or_none(yhat)
+                    yi_l = to_int_or_none(yhat_lower)
+                    yi_u = to_int_or_none(yhat_upper)
+                    if yi is None and yi_l is None and yi_u is None:
+                        dept_values[dept_norm] = None
+                    else:
+                        dept_values[dept_norm] = {"yhat_lower": yi_l, "yhat": yi, "yhat_upper": yi_u}
+                        # recolectar para percentiles, EXCLUYENDO None y excluyendo ceros
+                        for v in (yi_l, yi, yi_u):
+                            if v is not None and v != 0:
+                                vals_for_year.append(v)
+
+            # fallback global si necesario (excluyendo ceros)
+            if not vals_for_year:
+                vals_global = []
+                for df in dept_dfs.values():
+                    for candidate in ["yhat_lower","yhat","yhat_upper","YHAT_LOWER","YHAT","YHAT_UPPER"]:
+                        if candidate in df.columns:
+                            vals = pd.to_numeric(df[candidate], errors="coerce").dropna().tolist()
+                            for v in vals:
+                                try:
+                                    vi = int(round(float(v)))
+                                    if vi != 0:
+                                        vals_global.append(vi)
+                                except Exception:
+                                    continue
+                vals_for_year = vals_global
+
+            if not vals_for_year:
+                vmin, vmax = 0, 1
+            else:
+                p5, p95 = np.percentile(vals_for_year, [5, 95])
+                rng = p95 - p5
+                if rng < 1e-6:
+                    p5 -= 1
+                    p95 += 1
+                else:
+                    p5 -= 0.05 * rng
+                    p95 += 0.05 * rng
+                vmin, vmax = float(p5), float(p95)
+
+            st.markdown(f"Escala usada (excluyendo ceros/nulos): **vmin={vmin:.1f}**, **vmax={vmax:.1f}** (percentiles 5-95)")
+
+            # --- Construir features: solo crear anillos si yhat != 0 (yhat None o 0 -> no anillos) ---
+            new_features = []
+            labels = []  # para TextLayer
+
+            for feat in base_geo["features"]:
+                props = feat.get("properties", {})
+                nombre = props.get("NOMBRE_DPT") or props.get("NOMBRE") or ""
+                nombre_norm = normalize_name(nombre)
+
+                # match por código o nombre normalizado
+                matched = None
+                for key in ("DPTO", "DPTO_", "DPTO_COD", "DPTO_CODE"):
+                    code = props.get(key)
+                    if code is not None:
+                        cstr = str(code)
+                        if cstr in dept_values:
+                            matched = cstr
+                            break
+                if matched is None and nombre_norm in dept_values:
+                    matched = nombre_norm
+
+                geom = shape(feat["geometry"])
+                centroid = geom.centroid
+
+                # obtener yhat entero para etiqueta
+                yhat_val = None
+                if matched is not None and dept_values.get(matched) is not None:
+                    yhat_val = dept_values[matched].get("yhat")
+
+                # agregar etiqueta solo si yhat_val is not None -> mostrar entero + "(predecido)" si corresponde
+                if yhat_val is not None:
+                    label_text = f"{int(yhat_val)}"
+                    if is_predicted:
+                        label_text = f"{label_text} (predecido)"
+                    labels.append({"lon": centroid.x, "lat": centroid.y, "text": label_text})
+
+                # decidir si dibujar anillos: SOLO si yhat_val is not None AND yhat_val != 0
+                draw_rings = (yhat_val is not None) and (yhat_val != 0)
+
+                if (matched is None) or (dept_values.get(matched) is None) or (not draw_rings):
+                    # sin anillos -> agregamos la geometría completa en gris tenue
+                    new_features.append({
+                        "type": "Feature",
+                        "geometry": mapping(geom),
+                        "properties": {
+                            **props,
+                            "ring": -1,
+                            "value": None,
+                            "color": [200, 200, 200, 110],
+                            "label": props.get("NOMBRE_DPT", nombre)
+                        }
+                    })
+                    continue
+
+                vals = dept_values[matched]
+                outer_val = vals.get("yhat_lower")
+                mid_val = vals.get("yhat")
+                inner_val = vals.get("yhat_upper")
+                scales = [1.0, 0.65, INNER_MIN_SCALE]
+                vals_ring = [outer_val, mid_val, inner_val]
+
+                parts = geom.geoms if geom.geom_type == "MultiPolygon" else [geom]
+                for part in parts:
+                    c = part.centroid
+                    for i, scale_factor in enumerate(scales):
+                        try:
+                            scaled = scale(part, xfact=scale_factor, yfact=scale_factor, origin=(c.x, c.y))
+                            if scaled.is_empty:
+                                continue
+                        except Exception:
+                            scaled = part
+                        val = vals_ring[i]
+                        if val is None or val == 0:
+                            color = [190, 190, 190, 120]
+                        else:
+                            color = count_to_rgb_exaggerated(val, vmin=vmin, vmax=vmax, contrast=CONTRAST_FACTOR)
+                        new_features.append({
+                            "type": "Feature",
+                            "geometry": mapping(scaled),
+                            "properties": {
+                                **props,
+                                "ring": i,
+                                "value": int(val) if (val is not None) else None,
+                                "color": color,
+                                "label": props.get("NOMBRE_DPT", nombre)
+                            }
+                        })
+
+            # FeatureCollection final
+            new_geojson = {"type": "FeatureCollection", "features": new_features}
+            with open("colombia_forecast_3rings_exagerado_max.geojson", "w", encoding="utf-8") as f:
+                json.dump(new_geojson, f, ensure_ascii=False)
+
+            # Capa de anillos (NO pickable)
             polygon_layer = pdk.Layer(
                 "GeoJsonLayer",
-                geojson,
-                stroked=True,
+                new_geojson,
+                stroked=False,
                 filled=True,
                 extruded=False,
-                pickable=True,
-                auto_highlight=True,                 # <-- resalta al hover
+                pickable=False,
+                auto_highlight=False,
                 get_fill_color="properties.color",
-                get_line_color=[80, 80, 80],
+                get_line_color=[60, 60, 60],
             )
 
-            # Centra vista en Colombia
+            # Capa de texto con yhat encima de cada departamento (NO pickable)
+            if labels:
+                labels_df = pd.DataFrame(labels)
+            else:
+                labels_df = pd.DataFrame(columns=["lon","lat","text"])
+
+            text_layer = pdk.Layer(
+                "TextLayer",
+                data=labels_df,
+                pickable=False,
+                get_position=["lon", "lat"],
+                get_text="text",
+                get_size=TEXT_SIZE,
+                get_color=[0, 0, 0],
+                get_alignment_baseline="bottom"
+            )
+
             view_state = pdk.ViewState(latitude=4.5, longitude=-74.0, zoom=5)
-
-            tooltip = {
-                "html": "<b>{NOMBRE_DPT}</b><br/>Código: {DPTO}<br/>Count: {count}",
-                "style": {"backgroundColor":"white","color":"black","fontSize":"12px"}
-            }
-
-            deck = pdk.Deck(layers=[polygon_layer], initial_view_state=view_state, tooltip=tooltip)
+            deck = pdk.Deck(layers=[polygon_layer, text_layer], initial_view_state=view_state)
             st.pydeck_chart(deck)
+
+            # Tabla de referencia (enteros)
+            tab = []
+            for k, v in dept_values.items():
+                tab.append({
+                    "departamento_norm": k,
+                    "yhat_lower": (v["yhat_lower"] if v else None),
+                    "yhat": (v["yhat"] if v else None),
+                    "yhat_upper": (v["yhat_upper"] if v else None)
+                })
+            st.markdown("### Valores usados (enteros, por departamento normalizado)")
+            st.dataframe(pd.DataFrame(tab).sort_values("departamento_norm"), height=300)
+
+            st.success("He exagerado aun más el contraste. Cuando el slider entra en 2023+ las etiquetas muestran '(predecido)' y el yhat aparece en cifras enteras encima de cada departamento.")

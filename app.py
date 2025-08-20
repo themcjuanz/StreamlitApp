@@ -137,8 +137,12 @@ with tabs[0]:
 
 # --- FORECAST ---
 with tabs[1]:
-    st.markdown('<div class="section-header"><h3>Forecast con Prophet</h3><p>Generación de pronósticos para los próximos 24 meses usando un '
-    'conteo mensual extraido del dataset original</p></div>', unsafe_allow_html=True)
+    st.markdown(f"""
+    <div class="presentation-box">
+        <h2>Forecast con Prophet</h2>
+        <p>Usando el conteo mensual extraido del dataset original se hizo una pequeña prediccion:<p>
+    </div>
+    """, unsafe_allow_html=True)
 
     df_forecast = None
     try:
@@ -212,3 +216,82 @@ with tabs[1]:
             )
 
             st.altair_chart(chart, use_container_width=True)
+
+                    # Example dataimport streamlit as st
+            import pydeck as pdk
+            import json
+
+            import streamlit as st
+            import pydeck as pdk
+            import json
+    
+            # Carga GeoJSON (ajusta ruta)
+            with open("colombia_departments.json", "r", encoding="utf-8") as f:
+                geojson = json.load(f)
+
+                st.markdown(f"""
+                <div class="presentation-box">
+                    <h2>Mapa predictivo por departamentos</h2>
+                    <p>Usando un conteo selectivo se representa la prediccion por departamento:</p>
+                </div>
+                """, unsafe_allow_html=True)
+
+            # Ejemplo de counts: usa códigos DPTO para evitar problemas de nombres
+            counts = {
+                "05": 120,   # Antioquia (ejemplo)
+                "08": 80,    # Atlántico
+            }
+
+            # Función simple para convertir count -> color (verde->amarillo->rojo)
+            def count_to_rgb(c, vmin=0, vmax=200):
+                if c is None:
+                    c = 0
+                # normaliza entre 0 y 1
+                t = max(0, min(1, (c - vmin) / (vmax - vmin if vmax > vmin else 1)))
+
+                # colores base en RGB
+                dark_green = (0, 204, 102)   # #00cc66
+                bright_green = (0, 255, 153) # #00ff99
+
+                # interpolación lineal entre dark_green y bright_green
+                r = int(dark_green[0] + t * (bright_green[0] - dark_green[0]))
+                g = int(dark_green[1] + t * (bright_green[1] - dark_green[1]))
+                b = int(dark_green[2] + t * (bright_green[2] - dark_green[2]))
+                a = 180  # opacidad
+
+                return [r, g, b, a]
+
+
+            # Añade propiedades count y color a cada feature
+            for feat in geojson["features"]:
+                code = feat["properties"].get("DPTO") or feat["properties"].get("DPTO_") or feat["properties"].get("DPTO_COD") 
+                # si no usas códigos, puedes usar NOMBRE_DPT:
+                if code is None:
+                    code = feat["properties"].get("NOMBRE_DPT", "").upper()
+                count = counts.get(code, 0)
+                feat["properties"]["count"] = int(count)
+                feat["properties"]["color"] = count_to_rgb(count, vmin=0, vmax=max(counts.values()) if counts else 1)
+
+            # Capa GeoJson — usamos propiedades.color para el fill
+            polygon_layer = pdk.Layer(
+                "GeoJsonLayer",
+                geojson,
+                stroked=True,
+                filled=True,
+                extruded=False,
+                pickable=True,
+                auto_highlight=True,                 # <-- resalta al hover
+                get_fill_color="properties.color",
+                get_line_color=[80, 80, 80],
+            )
+
+            # Centra vista en Colombia
+            view_state = pdk.ViewState(latitude=4.5, longitude=-74.0, zoom=5)
+
+            tooltip = {
+                "html": "<b>{NOMBRE_DPT}</b><br/>Código: {DPTO}<br/>Count: {count}",
+                "style": {"backgroundColor":"white","color":"black","fontSize":"12px"}
+            }
+
+            deck = pdk.Deck(layers=[polygon_layer], initial_view_state=view_state, tooltip=tooltip)
+            st.pydeck_chart(deck)

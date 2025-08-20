@@ -339,9 +339,9 @@ with tabs[1]:
             # Mostrar etiqueta especial si estamos en periodo predecido
             is_predicted = selected_year >= PREDICTED_YEAR_THRESHOLD
             if is_predicted:
-                st.markdown(f"**Año seleccionado:** {selected_year} — **(predecido)**")
+                st.markdown(f"**Año seleccionados:** {selected_year} — **(predecido)**")
             else:
-                st.markdown(f"**Año seleccionado:** {selected_year}")
+                st.markdown(f"**Año seleccionados:** {selected_year}")
 
             # --- Extraer valores redondeados (ENTEROS) para el año seleccionado ---
             dept_values = {}  # dept_norm -> dict yhat_lower,yhat,yhat_upper (INT or None)

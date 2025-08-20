@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 # Configuración de la página
 # -------------------------
 st.set_page_config(
-    page_title="Análisis de Serie de Tiempo",
+    page_title="Modelos Predictivos de la Adopcion de Autos Electricos y Hibridos en Colombia",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"

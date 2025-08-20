@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 # Configuración de la página
 # -------------------------
 st.set_page_config(
-    page_title="Modelos Predictivos de la Adopcion de Autos Electricos y Hibridos en Colombia",
+    page_title="mpacolombia",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -93,7 +93,7 @@ desviacion = float(df_ejemplo['valor'].std(ddof=0))
 # -------------------------
 st.markdown("""
 <div class="main-header">
-    <h1>MODELOS PREDICTIVOS DE LA ADOPCIÓN DE AUTOS ELÉCTRICOS Y HÍBRIDOS EN COLOMBIA</h1>
+    <h1>Modelos predictivos de la adopción de vehículos eléctricos e híbridos en Colombia</h1>
     <h3>DASHBOARD DE VISUALIZACIÓN Y ANÁLISIS ESTADÍSTICO</h3>
 </div>
 """, unsafe_allow_html=True)

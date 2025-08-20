@@ -93,7 +93,7 @@ desviacion = float(df_ejemplo['valor'].std(ddof=0))
 # -------------------------
 st.markdown("""
 <div class="main-header">
-    <h1>ANÁLISIS DE SERIE DE TIEMPO</h1>
+    <h1>MODELOS PREDICTIVOS DE LA ADOPCIÓN DE AUTOS ELÉCTRICOS Y HÍBRIDOS EN COLOMBIA</h1>
     <h3>DASHBOARD DE VISUALIZACIÓN Y ANÁLISIS ESTADÍSTICO</h3>
 </div>
 """, unsafe_allow_html=True)

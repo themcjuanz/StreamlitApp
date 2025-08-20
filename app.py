@@ -88,15 +88,15 @@ with tabs[0]:
     # --- Valores únicos de columnas clave ---
     st.subheader("Valores únicos en variables categóricas")
 
-    if "DEPARTAMENTOS" in df_datos.columns:
+    if "DEPARTAMENTO" in df_datosp.columns:
         st.markdown("**Departamentos registrados:**")
-        st.write(sorted(df_datosp["DEPARTAMENTOS"].dropna().unique().tolist()))
+        st.write(sorted(df_datosp["DEPARTAMENTO"].dropna().unique().tolist()))
 
-    if "CLASE" in df_datos.columns:
+    if "CLASE" in df_datosp.columns:
         st.markdown("**Clases de vehículos:**")
         st.write(sorted(df_datosp["CLASE"].dropna().unique().tolist()))
 
-    if "MARCA" in df_datos.columns:
+    if "MARCA" in df_datosp.columns:
         st.markdown("**Marcas de vehículos:**")
         st.write(sorted(df_datosp["MARCA"].dropna().unique().tolist()))
 

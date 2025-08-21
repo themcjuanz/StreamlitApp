@@ -221,6 +221,7 @@ with tabs[1]:
             import glob
             import json
             import unicodedata
+            from datetime import datetime
 
             import pandas as pd
             import numpy as np
@@ -232,13 +233,14 @@ with tabs[1]:
             GEOJSON_PATH = "colombia_departments.json"
             FORECAST_FOLDER = "forecasts"   # carpeta con archivos DEPARTAMENTO_forecast.csv
             PREDICTED_YEAR_THRESHOLD = 2023
+            ZERO_TOL_FACTOR = 0.03   # tol relativo (3% del rango v95-v5); se usa max(MIN_ZERO_TOL,...)
+            MIN_ZERO_TOL = 1         # mínimo absoluto
             # ----------------------------------------
 
-            st.title("Mapa predictivo por departamentos (basado en yhat)")
             st.markdown("""
             <div class="presentation-box">
                 <h2>Mapa predictivo por departamentos</h2>
-                <p>Se colorea cada departamento según <code>yhat</code> (última fila del año seleccionado)</p>
+                <p>Selecciona un mes (si no hay datos para ese mes se usa la última fecha anterior disponible).</p>
             </div>
             """, unsafe_allow_html=True)
 
@@ -252,10 +254,7 @@ with tabs[1]:
                 return s
 
             # paleta original (interpolación linear)
-            def count_to_rgb(c, vmin=0, vmax=200):
-                if c is None:
-                    c = 0
-                # normaliza entre 0 y 1
+            def count_to_rgb(c, vmin=0, vmax=200, alpha=200):
                 denom = (vmax - vmin) if (vmax is not None and vmax > vmin) else 1.0
                 t = max(0.0, min(1.0, (c - vmin) / denom))
                 dark_green = (0, 204, 102)   # #00cc66
@@ -263,10 +262,10 @@ with tabs[1]:
                 r = int(dark_green[0] + t * (bright_green[0] - dark_green[0]))
                 g = int(dark_green[1] + t * (bright_green[1] - dark_green[1]))
                 b = int(dark_green[2] + t * (bright_green[2] - dark_green[2]))
-                a = 180
+                a = int(alpha)
                 return [r, g, b, a]
 
-            # --- Cargar geojson base ---
+            # --- Cargar geojson ---
             with open(GEOJSON_PATH, "r", encoding="utf-8") as f:
                 geojson = json.load(f)
 
@@ -277,6 +276,7 @@ with tabs[1]:
                 st.stop()
 
             dept_dfs = {}
+            all_months = set()
             years = []
             for fp in files:
                 fname = os.path.basename(fp)
@@ -286,7 +286,7 @@ with tabs[1]:
                 dept_norm = normalize_name(dept_raw)
                 try:
                     df = pd.read_csv(fp)
-                    # normalizar columnas a minúsculas
+                    # normalizar y ordenar por fecha (registros mensuales)
                     df.columns = [c.lower() for c in df.columns]
                     if "ds" not in df.columns:
                         st.warning(f"{fname} no tiene columna 'ds' — se omite.")
@@ -295,8 +295,12 @@ with tabs[1]:
                     df = df.dropna(subset=["ds"])
                     if df.empty:
                         continue
-                    dept_dfs[dept_norm] = df.reset_index(drop=True)
+                    df = df.sort_values("ds").reset_index(drop=True)
+                    dept_dfs[dept_norm] = df
                     years.extend(df["ds"].dt.year.dropna().astype(int).tolist())
+                    # recolectar meses disponibles en formato "YYYY-MM"
+                    months = df["ds"].dt.to_period("M").astype(str).unique().tolist()
+                    all_months.update(months)
                 except Exception as e:
                     st.warning(f"Error leyendo {fname}: {e}")
                     continue
@@ -305,45 +309,57 @@ with tabs[1]:
                 st.error("No se pudo leer ningún forecast válido.")
                 st.stop()
 
-            min_year = int(min(years))
-            max_year = int(max(years))
+            # construir lista ordenada de meses (strings "YYYY-MM")
+            months_sorted = sorted(list(all_months), key=lambda s: datetime.strptime(s, "%Y-%m"))
+            if not months_sorted:
+                st.error("No se encontraron meses en los archivos de forecasts.")
+                st.stop()
 
-            # Slider arriba
-            selected_year = st.slider("Selecciona año", min_year, max_year, value=max_year, format="%d")
+            # Slider de meses (select_slider para mostrar un slider con las opciones)
+            selected_month = st.select_slider("Selecciona mes (YYYY-MM)", options=months_sorted, value=months_sorted[-1])
+            # parsear a year,month y fecha límite = último día del mes
+            selected_period = pd.Period(selected_month, freq="M")
+            selected_year = selected_period.year
+            selected_month_int = selected_period.month
+            # predicted if year >= threshold
             is_predicted = selected_year >= PREDICTED_YEAR_THRESHOLD
             if is_predicted:
-                st.markdown(f"**Año seleccionado:** {selected_year} — **(predecido)**")
+                st.markdown(f"**Mes seleccionado:** {selected_month} — **(predecido)**")
             else:
-                st.markdown(f"**Año seleccionado:** {selected_year}")
+                st.markdown(f"**Mes seleccionado:** {selected_month}")
 
-            # --- Extraer solo yhat (entero) para el año seleccionado ---
-            dept_yhat = {}   # key: dept_norm or code -> int or None
+            # --- Extraer solo yhat (entero) y la fecha asociada para el mes seleccionado (fallback: última fila <= mes) ---
+            dept_yhat = {}        # key: dept_norm or code -> int or None
+            dept_yhat_date = {}   # key -> "YYYY-MM-DD" string or None
             yhat_values = []
+
             for dept_norm, df in dept_dfs.items():
-                df_year = df[df["ds"].dt.year == int(selected_year)]
-                if not df_year.empty:
-                    row = df_year.iloc[-1]
+                # buscamos la última fila con ds <= último día del mes seleccionado
+                cutoff = selected_period.to_timestamp(how="end")
+                df_le = df[df["ds"] <= cutoff]
+                if not df_le.empty:
+                    row = df_le.iloc[-1]
                 else:
-                    df_before = df[df["ds"].dt.year < int(selected_year)]
-                    row = df_before.iloc[-1] if not df_before.empty else None
+                    row = None
+
                 if row is None:
                     dept_yhat[dept_norm] = None
+                    dept_yhat_date[dept_norm] = None
                 else:
-                    yhat = None
-                    for cand in ("yhat","yhat","yhat"):  # column already lowercased
-                        if cand in row.index:
-                            yhat = row[cand]
-                            break
+                    yhat = row.get("yhat")
                     try:
                         if pd.isna(yhat):
                             dept_yhat[dept_norm] = None
+                            dept_yhat_date[dept_norm] = None
                         else:
                             yi = int(round(float(yhat)))
                             dept_yhat[dept_norm] = yi
+                            dept_yhat_date[dept_norm] = row["ds"].strftime("%Y-%m-%d")
                             if yi != 0:
                                 yhat_values.append(yi)
                     except Exception:
                         dept_yhat[dept_norm] = None
+                        dept_yhat_date[dept_norm] = None
 
             # vmin/vmax para la paleta (basado en yhat_values)
             if yhat_values:
@@ -355,36 +371,62 @@ with tabs[1]:
             else:
                 vmin, vmax = 0.0, 1.0
 
-            # --- Añade propiedades count y color por feature (reemplaza counts) ---
+            # calcular umbral "cerca a 0"
+            zero_tol = max(MIN_ZERO_TOL, ZERO_TOL_FACTOR * (abs(vmax - vmin)))
+
+            # --- Añade propiedades color y line_color por feature (transparencia total si corresponde) ---
             for feat in geojson["features"]:
                 props = feat.get("properties", {})
-                # intentamos código DPTO primero
+                # intentar por código DPTO
                 code = props.get("DPTO") or props.get("DPTO_") or props.get("DPTO_COD") or props.get("DPTO_CODE")
                 count_val = None
+                count_date = None
                 if code is not None:
-                    # code puede ser numérico o string; buscamos como string y sin normalizar
                     cstr = str(code)
                     if cstr in dept_yhat:
                         count_val = dept_yhat[cstr]
+                        count_date = dept_yhat_date.get(cstr)
                 if count_val is None:
-                    # intentar por nombre normalizado
                     nombre = props.get("NOMBRE_DPT") or props.get("NOMBRE") or ""
                     nombre_norm = normalize_name(nombre)
                     count_val = dept_yhat.get(nombre_norm)
-                # si sigue None o es 0 -> pintar gris apagado
-                if count_val is None or count_val == 0:
-                    color = [200, 200, 200, 120]
-                    count_int = 0 if count_val is None else int(count_val)
-                else:
-                    color = count_to_rgb(count_val, vmin=vmin, vmax=vmax)
-                    count_int = int(count_val)
-                # set properties
-                feat["properties"]["count"] = count_int
-                feat["properties"]["color"] = color
-                # guardamos yhat para tooltip
-                feat["properties"]["yhat_display"] = f"{count_int}{' (predecido)' if is_predicted and (count_val is not None) else ''}" if (count_val is not None) else None
+                    count_date = dept_yhat_date.get(nombre_norm)
 
-            # Capa GeoJson — usamos propiedades.color para el fill
+                # Si sin dato, 0 o cerca a 0 => TRANSPARENTE TOTAL (fill y borde)
+                transparent = False
+                if count_val is None:
+                    transparent = True
+                else:
+                    try:
+                        if count_val == 0 or abs(count_val) <= zero_tol:
+                            transparent = True
+                    except Exception:
+                        transparent = True
+
+                if transparent:
+                    color = [0, 0, 0, 0]        # fill totalmente transparente
+                    line_color = [0, 0, 0, 0]   # borde totalmente transparente
+                    count_prop = None
+                    display_text = None
+                else:
+                    color = count_to_rgb(count_val, vmin=vmin, vmax=vmax, alpha=200)
+                    line_color = [80, 80, 80, 255]
+                    count_prop = int(count_val)
+                    # construir texto para tooltip con fecha asociada
+                    if count_date:
+                        display_text = f"{count_prop} (fecha: {count_date})"
+                    else:
+                        display_text = f"{count_prop}"
+
+                    if is_predicted:
+                        display_text = display_text + " (predecido)"
+
+                feat["properties"]["count"] = count_prop if count_prop is not None else None
+                feat["properties"]["color"] = color
+                feat["properties"]["line_color"] = line_color
+                feat["properties"]["yhat_display"] = display_text
+
+            # Capa GeoJson — usamos propiedades.color y propiedades.line_color
             polygon_layer = pdk.Layer(
                 "GeoJsonLayer",
                 geojson,
@@ -392,12 +434,12 @@ with tabs[1]:
                 filled=True,
                 extruded=False,
                 pickable=True,
-                auto_highlight=True,                 # <-- resalta al hover
+                auto_highlight=True,
                 get_fill_color="properties.color",
-                get_line_color=[80, 80, 80],
+                get_line_color="properties.line_color",
             )
 
-            # Centra vista en Colombia
+            # Vista
             view_state = pdk.ViewState(latitude=4.5, longitude=-74.0, zoom=5)
 
             tooltip = {
@@ -408,18 +450,42 @@ with tabs[1]:
             deck = pdk.Deck(layers=[polygon_layer], initial_view_state=view_state, tooltip=tooltip)
             st.pydeck_chart(deck)
 
-            # Mostrar tabla con valores usados
+            # Tabla con valores usados
             rows = []
             for feat in geojson["features"]:
                 props = feat.get("properties", {})
                 rows.append({
                     "departamento": props.get("NOMBRE_DPT") or props.get("NOMBRE") or "",
                     "DPTO": props.get("DPTO") or props.get("DPTO_") or props.get("DPTO_COD") or "",
-                    "yhat": props.get("count")
+                    "yhat": props.get("count"),
+                    "yhat_date": props.get("yhat_display")
                 })
 
             st.markdown("### Valores yhat usados (por departamento)")
-            st.dataframe(pd.DataFrame(rows).sort_values("departamento"), height=300)
+            rows = []
+            for feat in geojson["features"]:
+                props = feat.get("properties", {})
+                yhat_val = props.get("count")
+                rows.append({
+                    "departamento": props.get("NOMBRE_DPT") or props.get("NOMBRE") or "",
+                    "DPTO": props.get("DPTO") or props.get("DPTO_") or props.get("DPTO_COD") or "",
+                    # si hay None lo dejamos como None por ahora; lo convertiremos después a 0
+                    "yhat": yhat_val,
+                    "yhat_date": props.get("yhat_display")
+                })
+
+            df_rows = pd.DataFrame(rows)
+
+            # Convertir None/NaN a 0 en la columna yhat y asegurarnos tipo entero
+            df_rows["yhat"] = pd.to_numeric(df_rows["yhat"], errors="coerce").fillna(0).astype(int)
+
+            # Ordenar de mayor a menor por yhat
+            df_rows = df_rows.sort_values("yhat", ascending=False).reset_index(drop=True)
+
+            st.markdown("### Valores yhat usados (por departamento) — None → 0; ordenado por yhat (desc)")
+            st.dataframe(df_rows, height=300)
+
+
 
 with tabs[2]:
     st.markdown(f"""
@@ -427,11 +493,26 @@ with tabs[2]:
         <h2>Arboles de Decisión</h2>
         <p>Se utilizo un modelo basado en arboles de decision a varias profundidades debido a su transparencia y facilidad de interpretacion
                 mediante un gridsearch optimizamos los hiperparametros y se obtuvo un modelo robusto.</p>
+        <ul>
+            <li>Modelo: Arboles de Decisión</li>
+            <li>Hiperparametros: Optimizados mediante GridSearch</li>
+            <li>Profundidad: 10, 17 (Mejor profundidad, aunque poca diferencia)</li>
+        </ul>
     </div>
     """, unsafe_allow_html=True)
 
     df_chi2 = pd.read_csv("chi2.csv", dtype=str)
+    df_anova = pd.read_csv("anova_results.csv", dtype=str)
+    df_cramers = pd.read_csv("cramers_results.csv", dtype=str)
 
+    st.subheader("Análisis de significancia en variables predictoras categoricas chi²")
 
-    st.subheader("Valores de Chi-cuadrado")
     st.dataframe(df_chi2.head(4))
+
+    st.subheader("Análisis de significancia en variables predictoras numéricas usando ANOVA")
+
+    st.dataframe(df_anova.head(4))
+
+    st.subheader("Análisis de correlación entre variables categóricas usando Cramér's V")
+
+    st.dataframe(df_cramers.head(10))

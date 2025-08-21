@@ -274,7 +274,7 @@ with tabs[1]:
                 denom = (vmax - vmin) if (vmax is not None and vmax > vmin) else 1.0
                 t = max(0.0, min(1.0, (c - vmin) / denom))
                 dark_green = (0, 204, 102)   # #00cc66
-                bright_green = (0, 255, 153) # #00ff99
+                bright_green = (100, 255, 180) # #00ff99
                 r = int(dark_green[0] + t * (bright_green[0] - dark_green[0]))
                 g = int(dark_green[1] + t * (bright_green[1] - dark_green[1]))
                 b = int(dark_green[2] + t * (bright_green[2] - dark_green[2]))
@@ -414,7 +414,7 @@ with tabs[1]:
                     transparent = True
                 else:
                     try:
-                        if count_val == 0 or abs(count_val) <= zero_tol:
+                        if count_val <= 0 or abs(count_val) <= zero_tol:   # <- nota el <= 0
                             transparent = True
                     except Exception:
                         transparent = True
@@ -497,8 +497,6 @@ with tabs[1]:
 
             # Ordenar de mayor a menor por yhat
             df_rows = df_rows.sort_values("yhat", ascending=False).reset_index(drop=True)
-
-            st.markdown("### Valores yhat usados (por departamento) — None → 0; ordenado por yhat (desc)")
             st.dataframe(df_rows, height=300)
 
 

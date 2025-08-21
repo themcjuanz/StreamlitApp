@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import altair as alt
 from datetime import datetime, timedelta
+import streamlit.components.v1 as components
 
 # -------------------------
 # Configuración de la página
@@ -133,6 +134,21 @@ with tabs[0]:
     # --- Vista previa del dataset limpio ---
     st.subheader("Vista previa del dataset limpio")
     st.dataframe(df_datosc.head(4))  # muestra primeras filas
+
+    st.set_page_config(layout="wide")
+
+    st.subheader("Analisis descriptivo de la base de datos")
+
+    # Incrustar Power BI público
+    iframe_code = """
+    <iframe title="elec" 
+        width="100%" height="600" 
+        src="https://app.powerbi.com/view?r=eyJrIjoiZTFhNDExOWYtOGVlNC00MWU2LThlZmItMGQ5NjFmOTE0Yjc0IiwidCI6IjU3N2ZjMWQ4LTA5MjItNDU4ZS04N2JmLWVjNGY0NTVlYjYwMCIsImMiOjR9" 
+        frameborder="0" allowFullScreen="true">
+    </iframe>
+    """
+
+    components.html(iframe_code, height=650, scrolling=True)
 
 # --- FORECAST ---
 with tabs[1]:

@@ -18,7 +18,6 @@ import os
 import glob
 import json
 import unicodedata
-import matplotlib.pyplot as plt
 import streamlit.components.v1 as components
 import base64
 from typing import Dict, List, Optional, Tuple

@@ -294,7 +294,7 @@ st.markdown(
 # -------------------------
 # NAV / TABS
 # -------------------------
-sections = ["PRESENTACIÓN", "FORECAST", "ARBOLES DE DECISION", "RANDOM FOREST", "GRADIENT BOOSTING", "KNN", "REGRESION LOGISTICA","MSV", "CONLUSIONES"]
+sections = ["PRESENTACIÓN", "FORECAST", "ARBOLES DE DECISION", "CONLUSIONES"]
 tabs = st.tabs(sections)
 
 # -------------------------
@@ -814,8 +814,17 @@ Se decidió eliminar algunas variables redundantes, específicamente CLASE y SER
     unsafe_allow_html=True,
 )
 
+with tabs[3]:
+    st.markdown(
+        """
+    <div class="presentation-box">
+        <h2>Conclusiones</h2>
+        <p>En el desarrollo de los modelos de clasificación para predecir el tipo de combustible ("COMBUSTIBLE": ELÉCTRICO, HÍBRIDO GASOLINA, HÍBRIDO DIESEL), se evaluaron Decision Tree, Random Forest, Gradient Boosting, KNN, MLPClassifier (Red Neuronal) y Logistic Regression. Todos los modelos, excepto Logistic Regression, exhibieron excelentes resultados tanto en el conjunto de entrenamiento como en el de prueba, con F1-scores superiores al 99% en la mayoría de los casos. Este desempeño excepcional se atribuye a una selección cuidadosa de variables predictoras, que incluyó el análisis de significancia mediante chi-cuadrado para categóricas y ANOVA para numéricas, eliminando redundancias (como CLASIFICACION y CARROCERIA por altas correlaciones en Cramér's V) y manejando la alta cardinalidad (agrupando categorías raras en "OTROS"). Estas variables, en conjunto, capturan patrones robustos, permitiendo una predicción precisa incluso con desbalance de clases, lo que demuestra la efectividad del preprocesamiento y la elección de modelos no lineales.
 
-
-    
-
+El único modelo que no alcanzó un buen desempeño, con F1-scores inferiores (tanto en entrenamiento como en prueba), fue Logistic Regression, a pesar de usar variables categóricas transformadas en dummies (One-Hot Encoding). La razón probable es que, como modelo lineal, asume relaciones lineales entre las features y la variable objetivo, lo que no se adapta bien a patrones no lineales complejos en los datos (ej. interacciones entre categóricas de alta cardinalidad y numéricas como CILINDRAJE=0 para eléctricos). Además, la alta dimensionalidad generada por dummies puede causar problemas de convergencia o multicolinealidad residual, a diferencia de modelos basados en árboles (Decision Tree, Random Forest, Gradient Boosting) o KNN, que manejan estas complejidades de manera más flexible. El F1-score, utilizado como método de evaluación principal, es la media armónica de precisión y recall, diferenciándose de métricas como accuracy (que ignora desbalance) o precisión/recall individuales al equilibrar falsos positivos y negativos. Elegimos `average='macro'` para promediar el F1 por clase sin ponderar por soporte, tratando todas las clases por igual y mitigando el desbalance, aunque también evaluamos accuracy, precisión y recall, obteniendo resultados excelentes en todas. Dado el alto rendimiento general con leves diferencias entre los modelos (excepto Logistic Regression), no nos decantamos por uno en particular, cumpliendo el objetivo de crear un sistema robusto para clasificar combustibles de vehículos en Colombia.
+<p>
+    </div>
+    """,
+        unsafe_allow_html=True,
+    )
 

@@ -4,6 +4,11 @@ import numpy as np
 import altair as alt
 from datetime import datetime, timedelta
 import streamlit.components.v1 as components
+import os
+import glob
+import json
+import unicodedata
+import pydeck as pdk
 
 # -------------------------
 # Configuración de la página
@@ -25,18 +30,18 @@ st.markdown("""
 
 /* Encabezado principal (más pequeño, color verde claro) */
 .main-header { 
-    background: #0d1f17;        /* verde oscuro sólido */
+    background: #0d1f17;         /* verde oscuro sólido */
     padding: 1rem; 
     border-radius: 0px; 
-    color: #a8f5c0;             /* verde claro elegante */
+    color: #a8f5c0;              /* verde claro elegante */
     text-align: center; 
     margin-bottom: 1.5rem; 
-    border: 1px solid #1e5a3a;  /* borde verde profundo */
+    border: 1px solid #1e5a3a;   /* borde verde profundo */
     box-shadow: 0 3px 8px rgba(0,0,0,0.5); /* sombra sutil */
 }
 .main-header h1 {
     font-size: 1.9rem;    
-    font-weight: 600;     
+    font-weight: 600;    
     margin: 0;
     letter-spacing: 0.5px;
 }
@@ -72,7 +77,6 @@ st.markdown("""
 # -------------------------
 COLUMNA_FECHA = 'ds'
 COLUMNA_VALOR = 'y'
-
 
 df_datos = pd.read_csv("mensual.csv")
 df_datosp = pd.read_csv("Numero_de_Veh_culos_El_ctricos_-_Hibridos_20250804.csv")
@@ -123,7 +127,7 @@ with tabs[0]:
 
     # --- Vista previa del dataset completo ---
     st.subheader("Vista previa del dataset original")
-    st.dataframe(df_datosp.head(4))  # muestra primeras filas
+    st.dataframe(df_datosp.head(4))
 
     st.markdown("""
     <div class="presentation-box">
@@ -133,7 +137,7 @@ with tabs[0]:
 
     # --- Vista previa del dataset limpio ---
     st.subheader("Vista previa del dataset limpio")
-    st.dataframe(df_datosc.head(4))  # muestra primeras filas
+    st.dataframe(df_datosc.head(4))
 
     st.set_page_config(layout="wide")
 
@@ -177,7 +181,7 @@ with tabs[1]:
             st.warning(f"El forecast debe contener {required_lower}. Encontradas: {list(df_forecast.columns)}")
         else:
             df_forecast = df_forecast.rename(columns={cols_lower['ds']: 'ds', cols_lower['yhat']: 'yhat',
-                                                      cols_lower['yhat_lower']: 'yhat_lower', cols_lower['yhat_upper']: 'yhat_upper'})
+            cols_lower['yhat_lower']: 'yhat_lower', cols_lower['yhat_upper']: 'yhat_upper'})
             df_forecast['ds'] = pd.to_datetime(df_forecast['ds'], errors='coerce')
             df_forecast = df_forecast.dropna(subset=['ds', 'yhat']).sort_values('ds')
 
@@ -186,7 +190,7 @@ with tabs[1]:
             # Banda de confianza
             band = alt.Chart(df_forecast).mark_area(
                 opacity=0.25, 
-                color="#00cc66"   # verde oscuro translúcido
+                color="#00cc66"
             ).encode(
                 x='ds:T',
                 y='yhat_lower:Q',
@@ -222,7 +226,7 @@ with tabs[1]:
             chart = alt.layer(band, line, points, rule).properties(
                 title="Forecast con intervalo de confianza",
                 height=450,
-                background="#0a0f0a"  # fondo oscuro igual al resto
+                background="#0a0f0a"
             ).configure_axis(
                 labelColor="white",
                 titleColor="white"
@@ -232,25 +236,12 @@ with tabs[1]:
 
             st.altair_chart(chart, use_container_width=True)
 
-                    # Example dataimport streamlit as st
-            import os
-            import glob
-            import json
-            import unicodedata
-            from datetime import datetime
-
-            import pandas as pd
-            import numpy as np
-
-            import streamlit as st
-            import pydeck as pdk
-
             # ---------------- Config ----------------
             GEOJSON_PATH = "colombia_departments.json"
-            FORECAST_FOLDER = "forecasts"   # carpeta con archivos DEPARTAMENTO_forecast.csv
+            FORECAST_FOLDER = "forecasts"
             PREDICTED_YEAR_THRESHOLD = 2023
-            ZERO_TOL_FACTOR = 0.03   # tol relativo (3% del rango v95-v5); se usa max(MIN_ZERO_TOL,...)
-            MIN_ZERO_TOL = 1         # mínimo absoluto
+            ZERO_TOL_FACTOR = 0.01
+            MIN_ZERO_TOL = 1
             # ----------------------------------------
 
             st.markdown("""
@@ -269,31 +260,27 @@ with tabs[1]:
                 s = "".join(ch for ch in s if ch.isalnum())
                 return s
 
-            # paleta original (interpolación linear)
-            def count_to_rgb(c, vmin=0, vmax=200, alpha=200):
+            def count_to_rgb(c, vmin=0, vmax=300, alpha=100):
                 denom = (vmax - vmin) if (vmax is not None and vmax > vmin) else 1.0
                 t = max(0.0, min(1.0, (c - vmin) / denom))
-                dark_green = (0, 153, 76)   # #00cc66
-                bright_green = (100, 255, 180) # #00ff99
+                dark_green = (0, 72, 46)
+                bright_green = (255, 200, 80)
                 r = int(dark_green[0] + t * (bright_green[0] - dark_green[0]))
                 g = int(dark_green[1] + t * (bright_green[1] - dark_green[1]))
                 b = int(dark_green[2] + t * (bright_green[2] - dark_green[2]))
                 a = int(alpha)
                 return [r, g, b, a]
 
-            # --- Cargar geojson ---
             with open(GEOJSON_PATH, "r", encoding="utf-8") as f:
                 geojson = json.load(f)
 
-            # --- Leer forecasts ---
             files = glob.glob(os.path.join(FORECAST_FOLDER, "*_forecast.csv"))
             if not files:
                 st.error(f"No se encontraron archivos '*_forecast.csv' en '{FORECAST_FOLDER}'")
                 st.stop()
 
+            # Diccionario para almacenar los dataframes de pronóstico de cada departamento
             dept_dfs = {}
-            all_months = set()
-            years = []
             for fp in files:
                 fname = os.path.basename(fp)
                 if not fname.upper().endswith("_FORECAST.CSV"):
@@ -302,7 +289,6 @@ with tabs[1]:
                 dept_norm = normalize_name(dept_raw)
                 try:
                     df = pd.read_csv(fp)
-                    # normalizar y ordenar por fecha (registros mensuales)
                     df.columns = [c.lower() for c in df.columns]
                     if "ds" not in df.columns:
                         st.warning(f"{fname} no tiene columna 'ds' — se omite.")
@@ -313,10 +299,6 @@ with tabs[1]:
                         continue
                     df = df.sort_values("ds").reset_index(drop=True)
                     dept_dfs[dept_norm] = df
-                    years.extend(df["ds"].dt.year.dropna().astype(int).tolist())
-                    # recolectar meses disponibles en formato "YYYY-MM"
-                    months = df["ds"].dt.to_period("M").astype(str).unique().tolist()
-                    all_months.update(months)
                 except Exception as e:
                     st.warning(f"Error leyendo {fname}: {e}")
                     continue
@@ -325,146 +307,132 @@ with tabs[1]:
                 st.error("No se pudo leer ningún forecast válido.")
                 st.stop()
 
-            # construir lista ordenada de meses (strings "YYYY-MM")
-           # construir lista ordenada de meses (strings "YYYY-MM")
-            months_sorted = sorted(list(all_months), key=lambda s: datetime.strptime(s, "%Y-%m"))
+            # --- Lógica de slider corregida y simplificada ---
+            start_period = pd.Period("2010-01", freq="M")
+            end_period = pd.Period("2028-12", freq="M")
+            months_extended = [p.strftime("%Y-%m") for p in pd.period_range(start=start_period, end=end_period, freq="M")]
 
-            # Si hay meses detectados, inicio = primero encontrado; sino fallback al mes actual
-            if months_sorted:
-                min_period = pd.Period(months_sorted[0], freq="M")
+            all_dates_from_files = [df["ds"].max() for df in dept_dfs.values() if not df.empty]
+            
+            if all_dates_from_files:
+                last_date_available = max(all_dates_from_files)
+                default_period = pd.Period(last_date_available, freq="M")
+                default_value = default_period.strftime("%Y-%m")
             else:
-                min_period = pd.Period(pd.Timestamp.now().to_period("M"))
-
-            # objetivo final para el slider: diciembre 2028
-            target_end = pd.Period("2028-12", freq="M")
-
-            # extremo derecho = max(último mes detectado, 2028-12)
-            if months_sorted:
-                max_detected = pd.Period(months_sorted[-1], freq="M")
-            else:
-                max_detected = min_period
-
-            end_period = max(max_detected, target_end)
-
-            # generar la lista completa de meses desde min_period hasta end_period (formato 'YYYY-MM')
-            months_extended = [p.strftime("%Y-%m") for p in pd.period_range(start=min_period, end=end_period, freq="M")]
-
-            # valor por defecto = último mes detectado si existe y está en la lista, sino el final 2028-12
-            default_value = months_extended[-1] if (not months_sorted) else (months_sorted[-1] if months_sorted[-1] in months_extended else months_extended[-1])
-
-            # Slider de meses (select_slider) — ahora siempre llega hasta 2028-12
+                default_value = months_extended[-1]
+            
             selected_month = st.select_slider("Selecciona mes (YYYY-MM)", options=months_extended, value=default_value)
+            
+            # --- Fin de la corrección del slider ---
 
             selected_period = pd.Period(selected_month, freq="M")
             selected_year = selected_period.year
             selected_month_int = selected_period.month
-            # predicted if year >= threshold
+            
             is_predicted = selected_year >= PREDICTED_YEAR_THRESHOLD
             if is_predicted:
                 st.markdown(f"**Mes seleccionado:** {selected_month} — **(predecido)**")
             else:
                 st.markdown(f"**Mes seleccionado:** {selected_month}")
 
-            dept_yhat = {}        # key: dept_norm or code -> int or None
-            dept_yhat_date = {}   # key -> "YYYY-MM-DD" string or None
+            # --- MODIFICACIÓN CLAVE AQUÍ: Lógica para obtener el valor del mapa ---
+            dept_yhat = {}
+            dept_yhat_date = {}
             yhat_values = []
-            # opcional: guardar si se usó yhat_upper para mostrar en tooltip
-            dept_used_upper = {}
 
-            # --- Extraer solo yhat (entero) y la fecha asociada para el mes seleccionado (fallback: última fila <= mes) ---
-            for dept_norm, df in dept_dfs.items():
-                # buscamos la última fila con ds <= último día del mes seleccionado
-                cutoff = selected_period.to_timestamp(how="end")
-                df_le = df[df["ds"] <= cutoff]
-                if not df_le.empty:
-                    row = df_le.iloc[-1]
-                else:
-                    row = None
+            # 1. Usar datos históricos para años pasados (hasta 2010)
+            historical_cutoff = pd.Period("2010-01", freq="M").to_timestamp()
+            
+            if selected_period.to_timestamp() <= historical_cutoff:
+                # Filtrar el dataframe histórico por el mes seleccionado
+                df_hist_filtered = df_datosc[pd.to_datetime(df_datosc['Fecha']).dt.to_period('M') == selected_period].copy()
+                df_hist_filtered['Departamento_Norm'] = df_hist_filtered['Departamento'].apply(normalize_name)
+                
+                # Agrupar por departamento y sumar las ventas
+                df_hist_sum = df_hist_filtered.groupby('Departamento_Norm')['Cantidad'].sum().reset_index()
+                
+                # Llenar los diccionarios con los datos históricos
+                for index, row in df_hist_sum.iterrows():
+                    dept_norm = row['Departamento_Norm']
+                    yhat = int(row['Cantidad'])
+                    dept_yhat[dept_norm] = yhat
+                    dept_yhat_date[dept_norm] = selected_month
+                    yhat_values.append(yhat)
+            else:
+                # 2. Usar datos de pronóstico para años futuros (a partir de 2023)
+                for dept_norm, df in dept_dfs.items():
+                    cutoff = selected_period.to_timestamp(how="end")
+                    df_le = df[df["ds"] <= cutoff]
+                    
+                    if not df_le.empty:
+                        row = df_le.iloc[-1]
+                    else:
+                        row = None
 
-                if row is None:
-                    dept_yhat[dept_norm] = None
-                    dept_yhat_date[dept_norm] = None
-                else:
-                    yhat = row.get("yhat")
-                    try:
-                        if pd.isna(yhat):
-                            dept_yhat[dept_norm] = None
-                            dept_yhat_date[dept_norm] = None
-                        else:
-                            yi = int(round(float(yhat)))
-                            dept_yhat[dept_norm] = yi
-                            dept_yhat_date[dept_norm] = row["ds"].strftime("%Y-%m-%d")
-                            if yi != 0:
-                                yhat_values.append(yi)
-                    except Exception:
+                    if row is None:
                         dept_yhat[dept_norm] = None
                         dept_yhat_date[dept_norm] = None
-
-            # vmin/vmax para la paleta (basado en yhat_values)
+                    else:
+                        yhat = row.get("yhat")
+                        try:
+                            if pd.isna(yhat):
+                                dept_yhat[dept_norm] = None
+                                dept_yhat_date[dept_norm] = None
+                            else:
+                                yi = int(round(float(yhat)))
+                                dept_yhat[dept_norm] = yi
+                                dept_yhat_date[dept_norm] = row["ds"].strftime("%Y-%m-%d")
+                                if yi != 0:
+                                    yhat_values.append(yi)
+                        except Exception:
+                            dept_yhat[dept_norm] = None
+                            dept_yhat_date[dept_norm] = None
+            
+            # --- Fin de la modificación clave ---
+            
             if yhat_values:
                 vmin = float(np.percentile(yhat_values, 5))
-                vmax = float(np.percentile(yhat_values, 95))
+                vmax = float(np.percentile(yhat_values, 97))
                 if abs(vmax - vmin) < 1e-6:
                     vmin -= 1
                     vmax += 1
             else:
                 vmin, vmax = 0.0, 2
 
-            # calcular umbral "cerca a 0"
             zero_tol = max(MIN_ZERO_TOL, ZERO_TOL_FACTOR * (abs(vmax - vmin)))
 
-            # vmin/vmax para la paleta (basado en yhat_values)
-            if yhat_values:
-                vmin = float(np.percentile(yhat_values, 5))
-                vmax = float(np.percentile(yhat_values, 95))
-                if abs(vmax - vmin) < 1e-6:
-                    vmin -= 1
-                    vmax += 1
-            else:
-                vmin, vmax = 0.0, 2
-
-            # calcular umbral "cerca a 0"
-            zero_tol = max(MIN_ZERO_TOL, ZERO_TOL_FACTOR * (abs(vmax - vmin)))
-
-            # --- Añade propiedades color y line_color por feature (transparencia total si corresponde) ---
             for feat in geojson["features"]:
                 props = feat.get("properties", {})
-                # intentar por código DPTO
                 code = props.get("DPTO") or props.get("DPTO_") or props.get("DPTO_COD") or props.get("DPTO_CODE")
                 count_val = None
                 count_date = None
-                if code is not None:
-                    cstr = str(code)
-                    if cstr in dept_yhat:
-                        count_val = dept_yhat[cstr]
-                        count_date = dept_yhat_date.get(cstr)
-                if count_val is None:
-                    nombre = props.get("NOMBRE_DPT") or props.get("NOMBRE") or ""
-                    nombre_norm = normalize_name(nombre)
-                    count_val = dept_yhat.get(nombre_norm)
-                    count_date = dept_yhat_date.get(nombre_norm)
+                
+                nombre = props.get("NOMBRE_DPT") or props.get("NOMBRE") or ""
+                nombre_norm = normalize_name(nombre)
+                
+                # Asignar el valor de yhat al departamento
+                count_val = dept_yhat.get(nombre_norm)
+                count_date = dept_yhat_date.get(nombre_norm)
 
-                # Si sin dato, 0 o cerca a 0 => TRANSPARENTE TOTAL (fill y borde)
                 transparent = False
                 if count_val is None:
                     transparent = True
                 else:
                     try:
-                        if count_val <= 0 or abs(count_val) <= zero_tol:   # <- nota el <= 0
+                        if count_val <= 0 or abs(count_val) <= zero_tol:
                             transparent = True
                     except Exception:
                         transparent = True
 
                 if transparent:
-                    color = [0, 0, 0, 0]        # fill totalmente transparente
-                    line_color = [0, 0, 0, 0]   # borde totalmente transparente
+                    color = [0, 0, 0, 0]
+                    line_color = [0, 0, 0, 0]
                     count_prop = None
                     display_text = None
                 else:
                     color = count_to_rgb(count_val, vmin=vmin, vmax=vmax, alpha=200)
                     line_color = [80, 80, 80, 255]
                     count_prop = int(count_val)
-                    # construir texto para tooltip con fecha asociada
                     if count_date:
                         display_text = f"{count_prop} (fecha: {count_date})"
                     else:
@@ -478,7 +446,6 @@ with tabs[1]:
                 feat["properties"]["line_color"] = line_color
                 feat["properties"]["yhat_display"] = display_text
 
-            # Capa GeoJson — usamos propiedades.color y propiedades.line_color
             polygon_layer = pdk.Layer(
                 "GeoJsonLayer",
                 geojson,
@@ -491,7 +458,6 @@ with tabs[1]:
                 get_line_color="properties.line_color",
             )
 
-            # Vista
             view_state = pdk.ViewState(latitude=4.5, longitude=-74.0, zoom=5)
 
             tooltip = {
@@ -502,7 +468,6 @@ with tabs[1]:
             deck = pdk.Deck(layers=[polygon_layer], initial_view_state=view_state, tooltip=tooltip)
             st.pydeck_chart(deck)
 
-            # Tabla con valores usados
             rows = []
             for feat in geojson["features"]:
                 props = feat.get("properties", {})
@@ -521,28 +486,22 @@ with tabs[1]:
                 rows.append({
                     "departamento": props.get("NOMBRE_DPT") or props.get("NOMBRE") or "",
                     "DPTO": props.get("DPTO") or props.get("DPTO_") or props.get("DPTO_COD") or "",
-                    # si hay None lo dejamos como None por ahora; lo convertiremos después a 0
                     "yhat": yhat_val,
                     "yhat_date": props.get("yhat_display")
                 })
 
             df_rows = pd.DataFrame(rows)
-
-            # Convertir None/NaN a 0 en la columna yhat y asegurarnos tipo entero
             df_rows["yhat"] = pd.to_numeric(df_rows["yhat"], errors="coerce").fillna(0).astype(int)
-
-            # Ordenar de mayor a menor por yhat
             df_rows = df_rows.sort_values("yhat", ascending=False).reset_index(drop=True)
             st.dataframe(df_rows, height=300)
 
-
-
+# --- ARBOLES DE DECISION ---
 with tabs[2]:
     st.markdown(f"""
     <div class="presentation-box">
         <h2>Arboles de Decisión</h2>
         <p>Se utilizo un modelo basado en arboles de decision a varias profundidades debido a su transparencia y facilidad de interpretacion
-                mediante un gridsearch optimizamos los hiperparametros y se obtuvo un modelo robusto.</p>
+              mediante un gridsearch optimizamos los hiperparametros y se obtuvo un modelo robusto.</p>
         <ul>
             <li>Modelo: Arboles de Decisión</li>
             <li>Hiperparametros: Optimizados mediante GridSearch</li>
@@ -556,13 +515,10 @@ with tabs[2]:
     df_cramers = pd.read_csv("cramers_results.csv", dtype=str)
 
     st.subheader("Análisis de significancia en variables predictoras categoricas chi²")
-
     st.dataframe(df_chi2.head(4))
 
     st.subheader("Análisis de significancia en variables predictoras numéricas usando ANOVA")
-
     st.dataframe(df_anova.head(4))
 
     st.subheader("Análisis de correlación entre variables categóricas usando Cramér's V")
-
     st.dataframe(df_cramers.head(10))

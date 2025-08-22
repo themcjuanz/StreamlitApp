@@ -294,7 +294,7 @@ st.markdown(
 # -------------------------
 # NAV / TABS
 # -------------------------
-sections = ["PRESENTACIÓN", "FORECAST", "ARBOLES DE DECISION"]
+sections = ["PRESENTACIÓN", "FORECAST", "ARBOLES DE DECISION", "RANDOM FOREST", "GRADIENT BOOSTING", "KNN", "REGRESION LOGISTICA","MSV", "CONLUSIONES"]
 tabs = st.tabs(sections)
 
 # -------------------------
@@ -790,12 +790,32 @@ Se decidió eliminar algunas variables redundantes, específicamente CLASE y SER
     else:
         st.info("vif.csv no encontrado.")
 
-    pdf_file = "decision_tree.pdf"
+    st.subheader("Grafica del Arbol")
 
-    with open(pdf_file, "rb") as f:
-        base64_pdf = base64.b64encode(f.read()).decode("utf-8")
+    pdf_id = "1pMKsmSPxFrGJ0PitfKvAnoIzW_3yIQ67"  # tu FILE_ID
+    pdf_url = f"https://drive.google.com/file/d/{pdf_id}/preview"
 
-    pdf_display = f"""
-        <iframe src="data:application/pdf;base64,{base64_pdf}" width="700" height="1000" type="application/pdf"></iframe>
+    st.markdown(f"""
+        <iframe src="{pdf_url}" width="1200" height="300" allow="autoplay"></iframe>
+        """, unsafe_allow_html=True)
+    
+    st.markdown(
     """
-    components.html(pdf_display, height=1000)
+<div class="presentation-box">
+    <h2>Resultados</h2>
+    <p style="display:flex; gap:9px; align-items:center; white-space:nowrap; overflow-x:auto; padding-bottom:3px;">
+        <span><strong>F1 Score:</strong> Training: 0.9940 — Testing: 0.9950</span>
+        <span><strong>Accuracy:</strong> Training: 0.9967 — Testing: 0.9974</span>
+        <span><strong>Recall:</strong> Training: 0.9984 — Testing: 0.9973</span>
+        <span><strong>Precision:</strong> Training: 0.9898 — Testing: 0.9927</span>
+    </p>
+</div>
+""",
+    unsafe_allow_html=True,
+)
+
+
+
+    
+
+

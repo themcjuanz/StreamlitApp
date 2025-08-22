@@ -161,7 +161,7 @@ with tabs[1]:
 
     df_forecast = None
     try:
-        df_forecast = pd.read_csv("forecast_24m.csv")
+        df_forecast = pd.read_csv("forecast_72m.csv")
     except FileNotFoundError:
         uploaded_f = st.sidebar.file_uploader("Sube forecast_24m.csv", type=["csv"], key="forecast")
         if uploaded_f is not None:
@@ -273,7 +273,7 @@ with tabs[1]:
             def count_to_rgb(c, vmin=0, vmax=200, alpha=200):
                 denom = (vmax - vmin) if (vmax is not None and vmax > vmin) else 1.0
                 t = max(0.0, min(1.0, (c - vmin) / denom))
-                dark_green = (0, 204, 102)   # #00cc66
+                dark_green = (0, 153, 76)   # #00cc66
                 bright_green = (100, 255, 180) # #00ff99
                 r = int(dark_green[0] + t * (bright_green[0] - dark_green[0]))
                 g = int(dark_green[1] + t * (bright_green[1] - dark_green[1]))
@@ -326,14 +326,35 @@ with tabs[1]:
                 st.stop()
 
             # construir lista ordenada de meses (strings "YYYY-MM")
+           # construir lista ordenada de meses (strings "YYYY-MM")
             months_sorted = sorted(list(all_months), key=lambda s: datetime.strptime(s, "%Y-%m"))
-            if not months_sorted:
-                st.error("No se encontraron meses en los archivos de forecasts.")
-                st.stop()
 
-            # Slider de meses (select_slider para mostrar un slider con las opciones)
-            selected_month = st.select_slider("Selecciona mes (YYYY-MM)", options=months_sorted, value=months_sorted[-1])
-            # parsear a year,month y fecha límite = último día del mes
+            # Si hay meses detectados, inicio = primero encontrado; sino fallback al mes actual
+            if months_sorted:
+                min_period = pd.Period(months_sorted[0], freq="M")
+            else:
+                min_period = pd.Period(pd.Timestamp.now().to_period("M"))
+
+            # objetivo final para el slider: diciembre 2028
+            target_end = pd.Period("2028-12", freq="M")
+
+            # extremo derecho = max(último mes detectado, 2028-12)
+            if months_sorted:
+                max_detected = pd.Period(months_sorted[-1], freq="M")
+            else:
+                max_detected = min_period
+
+            end_period = max(max_detected, target_end)
+
+            # generar la lista completa de meses desde min_period hasta end_period (formato 'YYYY-MM')
+            months_extended = [p.strftime("%Y-%m") for p in pd.period_range(start=min_period, end=end_period, freq="M")]
+
+            # valor por defecto = último mes detectado si existe y está en la lista, sino el final 2028-12
+            default_value = months_extended[-1] if (not months_sorted) else (months_sorted[-1] if months_sorted[-1] in months_extended else months_extended[-1])
+
+            # Slider de meses (select_slider) — ahora siempre llega hasta 2028-12
+            selected_month = st.select_slider("Selecciona mes (YYYY-MM)", options=months_extended, value=default_value)
+
             selected_period = pd.Period(selected_month, freq="M")
             selected_year = selected_period.year
             selected_month_int = selected_period.month
@@ -344,11 +365,13 @@ with tabs[1]:
             else:
                 st.markdown(f"**Mes seleccionado:** {selected_month}")
 
-            # --- Extraer solo yhat (entero) y la fecha asociada para el mes seleccionado (fallback: última fila <= mes) ---
             dept_yhat = {}        # key: dept_norm or code -> int or None
             dept_yhat_date = {}   # key -> "YYYY-MM-DD" string or None
             yhat_values = []
+            # opcional: guardar si se usó yhat_upper para mostrar en tooltip
+            dept_used_upper = {}
 
+            # --- Extraer solo yhat (entero) y la fecha asociada para el mes seleccionado (fallback: última fila <= mes) ---
             for dept_norm, df in dept_dfs.items():
                 # buscamos la última fila con ds <= último día del mes seleccionado
                 cutoff = selected_period.to_timestamp(how="end")
@@ -385,7 +408,20 @@ with tabs[1]:
                     vmin -= 1
                     vmax += 1
             else:
-                vmin, vmax = 0.0, 1.0
+                vmin, vmax = 0.0, 2
+
+            # calcular umbral "cerca a 0"
+            zero_tol = max(MIN_ZERO_TOL, ZERO_TOL_FACTOR * (abs(vmax - vmin)))
+
+            # vmin/vmax para la paleta (basado en yhat_values)
+            if yhat_values:
+                vmin = float(np.percentile(yhat_values, 5))
+                vmax = float(np.percentile(yhat_values, 95))
+                if abs(vmax - vmin) < 1e-6:
+                    vmin -= 1
+                    vmax += 1
+            else:
+                vmin, vmax = 0.0, 2
 
             # calcular umbral "cerca a 0"
             zero_tol = max(MIN_ZERO_TOL, ZERO_TOL_FACTOR * (abs(vmax - vmin)))

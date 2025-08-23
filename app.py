@@ -40,6 +40,7 @@ COLUMNA_FECHA = "ds"
 COLUMNA_VALOR = "y"
 
 # Archivos / paths
+CSV_FORECAST_ANUAL = "prediccion_intervalos_confianza.csv"
 CSV_PIB = "pib_forecast_prophet.csv"
 CSV_MENSUAL = "mensual.csv"
 CSV_ORIGINAL = "Numero_de_Veh_culos_El_ctricos_-_Hibridos_20250804.csv"
@@ -369,6 +370,54 @@ with tabs[0]:
 # -------------------------
 with tabs[1]:
     st.markdown(
+    """
+<div class="presentation-box">
+    <h2>Pronóstico Anual</h2>
+    <p>
+    La predicción de futuros registros constituye una herramienta fundamental en el marco de la transición hacia la movilidad sostenible, ya que posibilita anticipar la evolución de la demanda de vehículos electrificados y sus implicaciones en el mercado. Contar con proyecciones confiables permite a las entidades gubernamentales, fabricantes y distribuidores planificar de manera estratégica la expansión de la infraestructura de recarga, la formulación de políticas públicas orientadas a la adopción tecnológica y el diseño de estrategias comerciales ajustadas a las tendencias emergentes. De este modo, los modelos predictivos no solo reducen la incertidumbre en la toma de decisiones, sino que también garantizan una asignación más eficiente de los recursos, contribuyendo al fortalecimiento de la transición energética y a la consolidación de un sistema de transporte más sostenible y equitativo.
+</div>
+    """,
+    unsafe_allow_html=True,
+)
+    
+    import pandas as pd
+    import pandas as pd
+    import altair as alt
+    import streamlit as st
+
+        # Datos forecast por año
+    df_forecast = pd.DataFrame({
+        "ds": [2024, 2025, 2026, 2027, 2028],
+        "yhat": [21568, 26472, 32001, 38190, 45073],
+        "yhat_lower": [19794, 23859, 28316, 33164, 38400],
+        "yhat_upper": [23342, 29085, 35686, 43216, 51746],
+    })
+
+    # Forzar que solo se vean 2024–2028
+    x_axis = alt.X("ds:N", axis=alt.Axis(values=[2024, 2025, 2026, 2027, 2028]))
+
+    chart = (
+        alt.Chart(df_forecast)
+        .mark_area(opacity=0.25, color="#00cc66")
+        .encode(x=x_axis, y="yhat_lower", y2="yhat_upper")
+        + alt.Chart(df_forecast)
+        .mark_line(color="#00ff99", strokeWidth=2)
+        .encode(x=x_axis, y="yhat")
+        + alt.Chart(df_forecast)
+        .mark_point(size=40, color="blue")
+        .encode(x=x_axis, y="yhat")
+    )
+
+    st.altair_chart(chart, use_container_width=True)
+
+
+
+
+    st.write("""
+[Fuente: DATOS ABIERTOS](https://www.datos.gov.co)
+""")
+    
+    st.markdown(
         """
     <div class="presentation-box">
         <h2>Forecast con Prophet</h2>
@@ -378,10 +427,6 @@ with tabs[1]:
     """,
         unsafe_allow_html=True,
     )
-
-    st.write("""
-[Fuente: DANE](https://www.dane.gov.co)
-""")
 
     # ------------------------------
 # BLOQUE: cargar y mostrar CSV PIB

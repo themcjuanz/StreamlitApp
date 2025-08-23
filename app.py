@@ -835,7 +835,7 @@ with tabs[3]:
     st.subheader("Frontera")
     st.markdown(r"Se redujo cada muestra $\mathbb{R}^d$ a un vector de 2 coordenadas (componentes principales).")
 
-    st.image("frontera.png", width=500)  # ancho en píxeles
+    st.image("Frontera.png", width=500)  # ancho en píxeles
 
     st.subheader("Resultados del modelo")
 

@@ -292,7 +292,7 @@ st.markdown(
 # -------------------------
 # NAV / TABS
 # -------------------------
-sections = ["PRESENTACIÓN", "FORECAST", "ARBOLES DE DECISION", "CONLUSIONES"]
+sections = ["PRESENTACIÓN", "FORECAST", "ARBOLES DE DECISION", "RANDOM FOREST", "GRADIENT BOOSTING", "KNN", "REGRESION LOGISTICA", "CONCLUSIONES"]
 tabs = st.tabs(sections)
 
 # -------------------------
@@ -566,6 +566,10 @@ with tabs[1]:
                 .encode(x="fecha:T")
             )
 
+            st.write("""
+[Fuente: DATOS ABIERTOS](https://www.datos.gov.co/Transporte/Numero-de-Veh-culos-El-ctricos-Hibridos/7qfh-tkr3/about_data)
+""")
+
             chart = (
                 alt.layer(band, line, points, rule)
                 .properties(title="Registros (Electricos & Hibridos)", height=450, background="#0a0f0a")
@@ -578,6 +582,8 @@ with tabs[1]:
             # ---------------------------
             # Mapa predictivo por departamentos
             # ---------------------------
+
+
             st.markdown(
                 """
             <div class="presentation-box">
@@ -789,14 +795,10 @@ Se decidió eliminar algunas variables redundantes, específicamente CLASE y SER
         st.info("vif.csv no encontrado.")
 
     st.subheader("Grafica del Arbol")
+    st.write("Profundidad en la grafica = 4")
 
-    pdf_id = "1pMKsmSPxFrGJ0PitfKvAnoIzW_3yIQ67"  # tu FILE_ID
-    pdf_url = f"https://drive.google.com/file/d/{pdf_id}/preview"
+    st.image("Arbol.png", use_container_width=True)
 
-    st.markdown(f"""
-        <iframe src="{pdf_url}" width="1200" height="300" allow="autoplay"></iframe>
-        """, unsafe_allow_html=True)
-    
     st.markdown(
     """
 <div class="presentation-box">
@@ -813,6 +815,148 @@ Se decidió eliminar algunas variables redundantes, específicamente CLASE y SER
 )
 
 with tabs[3]:
+    st.markdown(
+        """
+        <div class="presentation-box">
+        <h2>Arboles Aleatorios</h2>
+        <p>Se utilizó un modelo basado en árboles aleatorios a varias profundidades debido a su transparencia y facilidad de interpretación.
+           Mediante GridSearch optimizamos los hiperparámetros y se obtuvo un modelo robusto.</p>
+        <ul>
+            <li>Modelo: Árboles Aleatorios</li>
+            <li>Hiperparámetros: Optimizados mediante GridSearch</li>
+            <li>Estimators: 1, 22 (Mejor número de estimadores)</li>
+            <li>Class Weight: balanced</li>
+        </ul>
+    </div>
+    """,
+        unsafe_allow_html=True,
+    )
+
+    st.subheader("Frontera")
+    st.markdown(r"Se redujo cada muestra $\mathbb{R}^d$ a un vector de 2 coordenadas (componentes principales).")
+
+    st.image("frontera.png", width=500)  # ancho en píxeles
+
+    st.subheader("Resultados del modelo")
+
+    st.markdown(
+    f"""
+    <div class="presentation-box">
+        <h3>Métricas de desempeño</h3>
+        <p style="display:flex; gap:9px; align-items:center; white-space:nowrap; overflow-x:auto; padding-bottom:3px;">
+            <span><strong>F1 Score:</strong> Training: {0.9954:.4f} — Testing: {0.9899:.4f}</span>
+            <span><strong>Accuracy:</strong> Training: {0.9990:.4f} — Testing: {0.9978:.4f}</span>
+            <span><strong>Recall:</strong> Training: {0.9952:.4f} — Testing: {0.9884:.4f}</span>
+            <span><strong>Precision:</strong> Training: {0.9955:.4f} — Testing: {0.9915:.4f}</span>
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+with tabs[4]:
+    st.markdown(
+        """
+        <div class="presentation-box">
+        <h2>Gradient Boosting</h2>
+        <p>Se utilizó un modelo de Gradient Boosting con <code>learning_rate=0.1</code>. 
+           Este algoritmo combina múltiples clasificadores débiles (árboles de decisión) 
+           de manera secuencial, donde cada nuevo árbol corrige los errores del anterior. 
+           Es potente para capturar relaciones no lineales en los datos.</p>
+        <ul>
+            <li>Modelo: Gradient Boosting</li>
+            <li>Learning Rate: 0.1</li>
+            <li>Base Learners: Árboles de decisión</li>
+        </ul>
+    </div>
+    """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+    """
+    <div class="presentation-box">
+        <h3>Resultados</h3>
+        <p style="display:flex; gap:9px; align-items:center; white-space:nowrap; overflow-x:auto; padding-bottom:3px;">
+            <span><strong>F1 Score:</strong> Training: 0.9986 — Testing: 0.9990</span>
+            <span><strong>Accuracy:</strong> Training: 0.9997 — Testing: 0.9997</span>
+            <span><strong>Recall:</strong> Training: 0.9996 — Testing: 0.9993</span>
+            <span><strong>Precision:</strong> Training: 0.9977 — Testing: 0.9987</span>
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+with tabs[5]:
+    st.markdown(
+    """
+    <div class="presentation-box">
+        <h2>K-Nearest Neighbors (KNN)</h2>
+        <p>Se utilizó un modelo KNN con <code>n_neighbors=10</code>. KNN clasifica según la mayoría de vecinos más cercanos y es sensible a la escala de las características.</p>
+        <ul>
+            <li>Modelo: K-Nearest Neighbors (KNN)</li>
+            <li>n_neighbors: 10, 1 (Mejor Valor)</li>
+            <li>Recomendación: escalar características</li>
+        </ul>
+    </div>
+    """,
+    unsafe_allow_html=True,
+    )
+
+    st.subheader("One-Hot Encoding")
+    st.write("pd.get_dummies convierte las columnas categóricas listadas en variables binarias (una columna 0/1 por cada categoría), produciendo df_one_hot_encoding listo para modelos que no aceptan texto; luego x_dummies obtiene las características eliminando la columna objetivo COMBUSTIBLE, y y_label toma la serie con las etiquetas numéricas ya codificadas (Label Encoding) que se usará como variable dependiente. Ten en cuenta que para asegurar columnas idénticas en train/test y manejar categorías desconocidas en producción es preferible usar OneHotEncoder de sklearn (con handle_unknown=\"ignore\") o un ColumnTransformer.")
+    df_dummies = pd.read_csv("x_dummies.csv")
+    st.dataframe(df_dummies.head(4))
+
+    st.markdown(
+    """
+    <div class="presentation-box">
+        <h3>Resultados</h3>
+        <p style="display:flex; gap:9px; align-items:center; white-space:nowrap; overflow-x:auto; padding-bottom:3px;">
+            <span><strong>F1 Score:</strong> Training: 0.9988 — Testing: 0.9991</span>
+            <span><strong>Accuracy:</strong> Training: 0.9998 — Testing: 0.9998</span>
+            <span><strong>Recall:</strong> Training: 0.9999 — Testing: 0.9997</span>
+            <span><strong>Precision:</strong> Training: 0.9978 — Testing: 0.9985</span>
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+    )
+    
+with tabs[6]:
+    st.markdown(
+    """
+    <div class="presentation-box">
+        <h2>Regresión Logística</h2>
+        <p>Se utilizó un modelo de Regresión Logística con <code>multi_class='multinomial'</code> y <code>solver='lbfgs'</code>. 
+           Este algoritmo estima probabilidades para cada clase y es ampliamente usado en clasificación multiclase.</p>
+        <ul>
+            <li>Modelo: Regresión Logística</li>
+            <li>multi_class: multinomial</li>
+            <li>solver: lbfgs</li>
+            <li>max_iter: 10000</li>
+        </ul>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+    st.markdown(
+    """
+    <div class="presentation-box">
+        <h3>Resultados</h3>
+        <p style="display:flex; gap:9px; align-items:center; white-space:nowrap; overflow-x:auto; padding-bottom:3px;">
+            <span><strong>F1 Score:</strong> Training: 0.8207 — Testing: 0.8126</span>
+            <span><strong>Accuracy:</strong> Training: 0.9426 — Testing: 0.9425</span>
+            <span><strong>Recall:</strong> Training: 0.7683 — Testing: 0.7648</span>
+            <span><strong>Precision:</strong> Training: 0.8931 — Testing: 0.8771</span>
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+    )
+
+with tabs[7]:
     st.markdown(
         """
     <div class="presentation-box">
